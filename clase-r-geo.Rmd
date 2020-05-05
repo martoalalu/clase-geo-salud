@@ -93,6 +93,8 @@ Vamos con el primero.
 #  De la tabla al mapa
 
 Bueno, ya basta de tablas, vamos al mapa!
+Vamos con una pregunta fácil. ¿Cómo se distribuye la población a lo largo y ancho de la Ciudad? ¿Donde hay más densidad poblacional?
+
 Para hacerlo vamos a seguir utilzando la sintaxis de **ggplot()** pero indicando que ahora estamos trabajando con un dato geográfico, para eso vamos a usar **geom_sf()** como parámetro.
 
 ```{r echo=TRUE, message=FALSE}
@@ -444,4 +446,5 @@ ggmap(CABA) +
   geom_point(data = filter(salud_caba,ORIGEN_FINANCIAMIENTO=="Público"), aes(x = long, y = lat, size=casos), color="red")
   
 ```
+
 
