@@ -203,7 +203,7 @@ Vamos a leer el archivo como hacemos con cualquier dataframe *no-geográfico*.
 
 ```{r}
 #Leemos el archivo
-covid <- read_csv(file = "./data/covid-caba.csv")
+covid <- read.csv(file = "./data/covid-caba.csv", sep=",")
 
 summary(covid)
 head(covid)
