@@ -64,11 +64,8 @@ En esta ocasión trabajaremos con un archivo en formato GeoJson que tiene los ra
 
 ```{r Cargando datos, echo=FALSE}
 
-#Seteamos el directorio en el que vamos a estar trabajando
-setwd("C:/Users/Marto/DataScience/clase-mapas-r-salud")
-
 #Cargamos los datos
-radios <- st_read('./data/caba_radios.geojson')
+radios <- st_read('https://github.com/martoalalu/clase-geo-salud/raw/master/data/caba_radios.geojson')
 ```
 
 Con solo cargar el archivo ya R nos da información valiosa sobre este archivo:
@@ -203,7 +200,7 @@ Vamos a leer el archivo como hacemos con cualquier dataframe *no-geográfico*.
 
 ```{r}
 #Leemos el archivo
-covid <- read.csv(file = "./data/covid-caba.csv", sep=",")
+covid <- read.csv(file = "https://raw.githubusercontent.com/martoalalu/clase-geo-salud/master/data/covid-caba.csv", sep=",")
 
 summary(covid)
 head(covid)
@@ -252,7 +249,7 @@ Vamos a usar un dataset disponibilizado por el Ministerio de Salud del Gobierno 
 
 ```{r}
 #Cargamos los datos
-salud <- read.csv("./data/refes-hospitales.csv", fileEncoding = 'UTF-8')
+salud <- read.csv("https://github.com/martoalalu/clase-geo-salud/raw/master/data/refes-hospitales.csv", fileEncoding = 'UTF-8')
 
 #Vemos la clase de objeto que es
 class(salud)
