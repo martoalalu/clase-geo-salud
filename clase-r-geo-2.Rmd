@@ -155,12 +155,44 @@ Una de las problemáticas del coronavirus es su elevada letalidad en personas ma
 Hagamos algunos mapas para ver cuál es su distribución en la Ciudad!
 
 ```{r}
-geriatricos <- st_read("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/master/data/geriatricos.geojson")
+geriatricos <- read.csv("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/master/data/geriatricos_caba.csv")
 
+head(geriatricos)
 ```
 
+Según el dataframe hay 558 geriátricos en la Ciudad.
+Para hacer los siguientes mapas no vamos a convertir este objeto a un objeto geográfico ya que vamos a aprovechar unos parámetros de ggplot() que se pueden aplicar cualquier tipo de dataframe que tenga 2 columnas numéricas (y que por tanto pueden ubicarse en un eje cartesiano).
+
+Vamos a empezar a hacer un `geom_point()` indicandole que el eje X es nuestra longitud y el eje Y nuestra latitud.
 
 
+```{r}
+ggmap(CABA) +
+    geom_point(data=geriatricos, aes(x=X, y=Y))
+```
+
+Nos da la sensación en zonas cómo Villa Urquiza, Flores, Caballito y Colegiales tienen concentración de geriátricos. Pero este tipo de mapa no nos impide ver con facilidad.
+
+Hagamos un mapa de densidad. Para eso usamos el parámetro `geom_bind2`
+
+```{r}
+ggmap(CABA)+
+  geom_bin2d(data = geriatricos, aes(x=X, y=Y), bins = 30) +
+  scale_fill_viridis_c()
+```
+
+R directamente arma grillas de igual tamaño, cuenta la cantidad de puntos que hay en cada celda y le asigna un color. Todo en uno!
+Esto es muy útil cuando queremos ver concentración de eventos.
+
+Ahora probemos con un mapa que muestre la misma información pero simulando curvas de nivel.
+
+```{r}
+ggmap(CABA) +
+  stat_density2d(data = geriatricos, aes(x = X, y = Y, fill=stat(level)),geom="polygon")+
+  scale_fill_viridis_c()
+```
+
+Bastante mejor! Hay una concentración muy marcada en Flores, es el pico de nuestra "montaña de geriátricos". Con este tipo de visualización Villa Urquiza y Caballito son más "sierras".
 
 
 
