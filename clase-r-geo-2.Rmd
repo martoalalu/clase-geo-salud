@@ -1,0 +1,73 @@
+---
+title: "Mapeando datos en R - Clase 2"
+author: "Martín Alalú"
+date: "29/04/2020"
+output: 
+  html_document:
+    fig_height: 8
+    fig_width: 12
+    #code_folding: "hide"
+    toc: true
+    toc_float:
+      toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    theme: paper
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
+```
+
+## Intro
+
+En esta segunda clase aprovecharemos para aprender una serie de herramientas sumamente útiles al momento de trabajar con datos geográficos:
+
+* Geocodificar direcciones 
+* Cargar capas base para dar contexto
+* Realizar mapas de calor o **heatmaps**
+* Reproyectar capas
+
+
+```{r cars}
+summary(cars)
+```
+
+## Geocodificando direcciones
+
+Muchas veces la información que tenemos hace referencia a un lugar en el terreno pero no tenemos un par de coordenadas para ubicar en un mapa. Por ejemplo si contamos con un listado que tiene direcciones, por ejemplo Tres Arroyos 614, que sabemos dónde está pero no tenemos un par de coordenadas que permiten ubicarla en un mapa. 
+
+Por suerte esto tiene una solución! Geocodificación es el proceso que permite transformar una dirección exacta en un par de coordenadas, permitiendo así tener un objeto geográfico con una geometría precisa.
+
+Usar los servicios de [Open Street Map](https://www.r-bloggers.com/introducing-the-nominatim-geocoding-package/), [Google](https://www.r-bloggers.com/geocoding-with-ggmap-and-the-google-api/) o Here son algunas opciones que tenemos pero hoy vamos a usar el [servicio web de geocodificación del Gobierno de la Ciudad de Buenos Aires](http://usig.buenosaires.gob.ar/), el cual es libre y gratuito.
+
+Hay un montón de funcionalidades que tiene, pero hoy vamos a usar 2 principales que son muy útiles: *normalización* y *geocodificación*. Es decir que en un simple paso vamos a **"corregir"** el campo de una dirección para pasarlo al nombre oficial y luego transformar esa dirección normalizada a un punto en el mapa!
+
+La librería que nos facilita el uso de este servicio se llama [RUMBA](https://github.com/bitsandbricks/RUMBA), la cual la instalamos con el clásico `install.packages("RUMBA")`, y los datos que vamos a usar son un listado de direcciones aleatorias.
+
+```{r}
+#install.packages("devtools")
+#devtools::install_github("bitsandbricks/RUMBA")
+
+library(RUMBA)
+
+```
+
+
+
+## Reproyectando capas
+
+Un dato clave al momento de manipular objetos geográficos es saber su Sistema de Coordenadas de Referencia (CRS) y Proyección. Muchas veces nos pasa que al manipular más de un objeto geo los mismos se encuentran en distintas CRS lo cual nos impedirá poder hacer las operaciones que querramos. 
+
+Veamos un ejemplo!
+```{r pressure, echo=FALSE}
+library(sf)
+library(tidyverse)
+
+caba <- st_read("http://cdn.buenosaires.gob.ar/datosabiertos/datasets/perimetro/perimetro.geojson")
+
+
+```
+
