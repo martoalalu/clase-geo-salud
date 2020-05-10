@@ -28,7 +28,7 @@ En esta segunda clase aprovecharemos para aprender una serie de herramientas sum
 * Geocodificar direcciones 
 * Cargar capas base para dar contexto
 * Realizar mapas de calor o **heatmaps**
-* Reproyectar capas
+* Calcular distancias
 
 
 ## Geocodificando direcciones
@@ -154,23 +154,13 @@ Hagamos otros tipos de mapas. Tener ubicaciones exactas, es decir objetos que so
 Una de las problemáticas del coronavirus es su elevada letalidad en personas mayores de 65 años, lo cual hace que los geriátricos sean focos especialmente críticos.
 Hagamos algunos mapas para ver cuál es su distribución en la Ciudad!
 
-
-
-
-
-
-
-
-
-
-## Reproyectando capas
-
-Un dato clave al momento de manipular objetos geográficos es saber su Sistema de Coordenadas de Referencia (CRS) y Proyección. Muchas veces nos pasa que al manipular más de un objeto geo los mismos se encuentran en distintas CRS lo cual nos impedirá poder hacer las operaciones que querramos. 
-
-Veamos un ejemplo!
-
-```{r , echo=FALSE}
-caba <- st_read("http://cdn.buenosaires.gob.ar/datosabiertos/datasets/perimetro/perimetro.geojson")
+```{r}
+geriatricos <- st_read("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/master/data/geriatricos.geojson")
 
 ```
+
+
+
+
+
 
