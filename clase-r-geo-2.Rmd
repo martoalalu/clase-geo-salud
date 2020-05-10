@@ -45,7 +45,7 @@ Usar los servicios de [Open Street Map](https://www.r-bloggers.com/introducing-t
 
 Hay un montón de funcionalidades que tiene, pero hoy vamos a usar 2 principales que son muy útiles: *normalización* y *geocodificación*. Es decir que en un simple paso vamos a **"corregir"** el campo de una dirección para pasarlo al nombre oficial y luego transformar esa dirección normalizada a un punto en el mapa!
 
-La librería que nos facilita el uso de este servicio se llama [RUMBA](https://github.com/bitsandbricks/RUMBA), la cual la instalamos con el clásico `install.packages("RUMBA")`, y los datos que vamos a usar son un listado de direcciones aleatorias.
+La librería que nos facilita el uso de este servicio se llama [RUMBA](https://github.com/bitsandbricks/RUMBA), la cual la instalamos con el clásico `install.packages("RUMBA")`, y los datos que vamos a usar son un listado de direcciones de farmacias en la Ciudad de Buenos Aires.
 
 ```{r}
 #install.packages("devtools")
@@ -53,6 +53,13 @@ La librería que nos facilita el uso de este servicio se llama [RUMBA](https://g
 
 library(RUMBA)
 
+farmacias <- read.csv("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/master/data/farmacias.csv")
+
+head(farmacias)
+```
+
+```{r}
+farmacias_geo <- mutate_USIG_geocode(farmacias, "direccion")
 ```
 
 
