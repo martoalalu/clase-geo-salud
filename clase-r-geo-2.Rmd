@@ -31,10 +31,6 @@ En esta segunda clase aprovecharemos para aprender una serie de herramientas sum
 * Reproyectar capas
 
 
-```{r cars}
-summary(cars)
-```
-
 ## Geocodificando direcciones
 
 Muchas veces la información que tenemos hace referencia a un lugar en el terreno pero no tenemos un par de coordenadas para ubicar en un mapa. Por ejemplo si contamos con un listado que tiene direcciones, por ejemplo Tres Arroyos 614, que sabemos dónde está pero no tenemos un par de coordenadas que permiten ubicarla en un mapa. 
@@ -48,19 +44,122 @@ Hay un montón de funcionalidades que tiene, pero hoy vamos a usar 2 principales
 La librería que nos facilita el uso de este servicio se llama [RUMBA](https://github.com/bitsandbricks/RUMBA), la cual la instalamos con el clásico `install.packages("RUMBA")`, y los datos que vamos a usar son un listado de direcciones de farmacias en la Ciudad de Buenos Aires.
 
 ```{r}
+
 #install.packages("devtools")
 #devtools::install_github("bitsandbricks/RUMBA")
 
 library(RUMBA)
+library(tidyverse)
+library(sf)
 
 farmacias <- read.csv("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/master/data/farmacias.csv")
 
 head(farmacias)
 ```
 
+El dataframe tiene una columna que tiene la dirección. Qué bien!
+Pero no tiene lat-long... Qué mal!
+Podemos geolocalizarla igual! Qué bien!
+
+Con la función `mutate_USIG_geocode` podemos agregar las columnas de lon y lat y así tener nuestro tan preciado par de coordenadas. Es bastante simple, en primer lugar le indicamos el dataframe (aca es farmacias) y luego le especificamos el campo que tiene la dirección **entre comillas**. Y listo, ya tenemos un dataframe con par de coordenadas. Magia!
+
 ```{r}
 farmacias_geo <- mutate_USIG_geocode(farmacias, "direccion")
+
+head(farmacias_geo)
 ```
+
+Y ahora sí podemos pasarlo a objeto geográfico y luego al mapa!
+
+```{r}
+farmacias_geo <- farmacias_geo %>% 
+  filter(!is.na(lon), !is.na(lat)) %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+farmacias_geo
+```
+
+Genial. Ahora nuestro objeto es geográfico 100%. Por último, al mapa.
+
+```{r}
+ggplot() +
+  geom_sf(data=farmacias_geo)
+```
+
+Ok. Logramos mapear los puntos pero no tenemos una referencia clara, ni siquiere sabemos si todos están en la Ciudad de Buenos Aires. Como que el mapa está vacío...
+
+## Datos con contexto: capas base
+
+Cuando manejamos datos geográficos el contexto es algo muy importante, tener una referencia sobre dónde están ubicados es clave ya que nos sitúa y al mismo tiempo comunica mejor. 
+Una manera de hacer esto es agregandole una capa base, algo asi como el lienzo sobre el cual "pintamos" nuestros datos.
+
+Para hacerlo vamos a usar las librerías **ggmap** y **osmdata**.
+
+Básicamente lo primero que tenemos que hacer es indicarle a R cuál es el limite, el *boundin gbox* del mapa que queremos descargarnos. Usamos la función `getbb` y le decimos que es "Ciudad Autónoma de Buenos Aires" ya que es el nombre oficial. Si estuvieramos haciendo un mapa de por ejemplo Rosario le indicaríamos "Rosario, Santa Fe, Argentina".
+
+```{r}```{r}
+library(ggmap)
+library(osmdata)
+
+bbox <- getbb("Ciudad Autónoma de Buenos Aires,Argentina")
+
+head(bbox)
+```
+
+El resultado es una matriz que tiene las X e Y mínimas y máximas que delimitan a la Ciudad de Buenos Aires. Ahora lo que tenemos que hacer es pedirle que nos tragia la capa base con `get_stamenmap`, la cual tiene una serie de parámetros a especificar:
+
+* En `bbox`le indicamos los límites específicos, en este caso lo tenemos guardado en un objeto asi que ponemos el nombre con el que lo guardamos (**bbox**).
+
+* En `maptype` le indicamos el tipo de mapa que queremos descargarnos. Hay capas base que tienen el terreno, otros solo las calles, algunos en blanco y negro. Ahora nos estamos descargando el `toner-background`, pero si quieren otro tipo pueden chequear la página de [Stamen Maps](http://maps.stamen.com/#terrain/12/37.7706/-122.3782).
+
+* En `zoom` le indicamos el nivel de detalle que queremos. A más zoom, más detalle, pero también más pesado el archivo que nos descarguemos...
+
+```{r}
+#Descargamos el mapa
+CABA <- get_stamenmap(bbox = bbox,
+                      maptype = "terrain",zoom=12)
+```
+
+Luego para volver a mapear en vez de usar ggplot() vamos a usar `ggmap()` pero no se preocupen la sintaxis sigue siendo la misma!
+
+Llamamos  ala nueva función y entre parentesis le indicamos el nombre del objeto que tiene descargado el mapa que usaremos como capa base.
+
+```{r}
+ggmap(CABA)
+```
+
+
+Perfecto! Lo bueno es que si no nos gusta este mapa podemos probar con otro muy fácilmente, por ejemplo con `toner-background`.
+
+```{r}
+CABA <- get_stamenmap(bbox = bbox,
+                      maptype = "toner-background",zoom=12)
+
+ggmap(CABA)
+```
+
+Y ahora sólo resta agregar los datos como una capa más.
+
+```{r}
+ggmap(CABA) +
+  geom_sf(data=farmacias_geo, inherit.aes=FALSE)
+```
+
+Genial! Ahora sí tenemos una referencia más clara!
+
+## Más allá del choropleth
+
+Hagamos otros tipos de mapas. Tener ubicaciones exactas, es decir objetos que son puntos, nos permiten hacer otros tipos de mapas como de *calor (heatmap)*, de *burbujas (bubblemap)* o de *densidad (densitymap)*, entre otros.
+
+Una de las problemáticas del coronavirus es su elevada letalidad en personas mayores de 65 años, lo cual hace que los geriátricos sean focos especialmente críticos.
+Hagamos algunos mapas para ver cuál es su distribución en la Ciudad!
+
+
+
+
+
+
+
 
 
 
@@ -69,12 +168,9 @@ farmacias_geo <- mutate_USIG_geocode(farmacias, "direccion")
 Un dato clave al momento de manipular objetos geográficos es saber su Sistema de Coordenadas de Referencia (CRS) y Proyección. Muchas veces nos pasa que al manipular más de un objeto geo los mismos se encuentran en distintas CRS lo cual nos impedirá poder hacer las operaciones que querramos. 
 
 Veamos un ejemplo!
-```{r pressure, echo=FALSE}
-library(sf)
-library(tidyverse)
 
+```{r , echo=FALSE}
 caba <- st_read("http://cdn.buenosaires.gob.ar/datosabiertos/datasets/perimetro/perimetro.geojson")
-
 
 ```
 
