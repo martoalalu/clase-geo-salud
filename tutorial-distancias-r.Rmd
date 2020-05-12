@@ -1,0 +1,169 @@
+---
+title: "Consultas espaciales en R"
+author: "Martin Alalu"
+date: "5/3/2020"
+output: 
+  html_document:
+    fig_height: 8
+    fig_width: 12
+    #code_folding: "hide"
+    toc: true
+    toc_float:
+      toc_collapsed: true
+    toc_depth: 3
+    theme: flatly
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
+```
+
+
+## Calculando distancias con R
+
+Calcular distancias es una de las funciones espaciales más útiles ya que permite ver con claridad cómo la accesibilidad a distintos bienes y servicios se distribuye desigualmente en el espacio. En tiempos de coronavirus y cuarentena ésta cuestión cobró mayor relevancia ya que al limitarse la movilidad de las personas se cristalizan los patrones espaciales, haciendo que una parte de la población tenga un acceso privilegiado a bienes y servicios mientras que otra queda se ve obligada a trasladarse más para conseguir lo mismo (y por ende se expone más al virus).
+
+Una de las cuestiones que surgió fue la limitación para moverse a no más de 500 metros a la redonda. Analicemos esta medida en términos de acceso a un espacio verde, algo que la Organización Mundial de la Salud considera vital para el bienestar de la población. ¿Qué porción de la población de la Ciudad de Buenos Aires está a 500 metros de una plaza?
+
+Hagamos un choropleth map que muestre con mayor intensidad aquellos radios censales que están más cerca de una plaza.
+
+Para esto usaremos 2 datasets: radios censales y ubicación de espacios verdes, del portal de datos abiertos del Gobierno de la Ciudad de Buenos Aires.
+
+
+## Explorando los datos
+```{r datos, echo=TRUE, message=FALSE}
+
+library(tidyverse)
+library(ggmap)
+library(sf)
+
+setwd("C:/Users/Marto/DataScience/clase-mapas-r-salud")
+
+#Cargamos
+radios <- st_read('./data/caba_radios.geojson')
+plazas <- st_read("./data/espacios-verdes-catastrales.geojson")
+
+
+ggplot() +
+  geom_sf(data=plazas, fill="green")
+```
+
+Tenemos 1402 espacios verdes. Veamos qué categorías hay en el campo `TIPO_EV`.
+
+```{r, echo=TRUE, message=FALSE}
+unique(plazas$TIPO_EV)
+```
+
+Vemos que hay espacios verdes que son canteros, plazoletas o en autopistas. Nuestro objetivo es ver el acceso a espacios verdes en los que las personas puedan distenderse y realizar algún tipo de actividad, por eso vamos a quedarnos sólo con las plazas, parques, jardín botánico, bosque, reserva ecológica, parque deportivo y espacios verdes.
+
+```{r, echo=TRUE, message=FALSE}
+plazas <- filter(plazas,TIPO_EV %in% c("PLAZA","PARQUE","JARDÍN BOTÁNICO","BOSQUE","RESERVA ECOLÓGICA","ESPACIO VERDE","PARQUE DEPORTIVO", "ESPACIO PÚBLICO"))
+
+ggplot() +
+  geom_sf(data=plazas, fill="green")
+```
+
+## Del polígono al centroide
+
+Para calcular distancias necesitamos hacerlo de un punto exacto a otro. Necesitamos transformar nuestros polígonos (plazas y radios) en puntos exactos, para eso vamos a crear 2 nuevas capas que tengan el centroide de cada plaza y radio. Con `st_point_on_surface` nos aseguramos que el punto caiga adentro del polígono.
+
+```{r, echo=TRUE, message=FALSE}
+plazas_c <- st_point_on_surface(plazas)
+radios_c <- st_point_on_surface(radios)
+```
+
+Volvamos al mapa.
+
+
+```{r, echo=TRUE, message=FALSE}
+ggplot() +
+  geom_sf(data=radios_c, size=0.5) +
+  geom_sf(data=radios, fill=NA) +
+  geom_sf(data=plazas, fill=NA) +
+  geom_sf(data=plazas_c, color="lightgreen")
+```
+
+## De un centroide a otro
+
+Perfecto. Ahora bien, lo que queremos hacer es para cada centroide del radio censal encontrar el centroide de la plaza más cercana, calcular su distancia y agregarla como columna al dataframe de radios.
+
+Se hace en pocas líneas pero vamos a explicarlo paso a paso
+
+Primero tenemos que pedirle a R que por cada centroide de radio censal busque el centroide de la plaza más cercana. Esto lo hacemos utilizando la función `st_nearest_feature`.
+
+```{r, echo=TRUE, message=FALSE}
+st_nearest_feature(radios_c,plazas_c)[1:5]
+```
+
+Lo que nos devuelve es una lista en la que asocia el index de cada elemento de radios_c con el index más cercano de plazas_c. Así sabemos que el primer radio censal (index = 1) tiene como plaza más cercana a la ubicada en el index = 288.
+
+Lo que vamos a hacer es calcular distancia elemento por elemento y para ello necesitamos tener "parejas" de radios y plazas, que por cada radio haya sí o sí una plaza asociada. 
+Esto es sumamente útil ya que R va a agarrar el primer elemento de radios_c y va a calcular la distancia a su plaza asociada por orden, es decir uno a uno.
+
+Entonces el siguiente paso es tener un dataframe que no sólo tenga el index de la plaza más cercana a cada radio sino tener la información geográfica (especialmente la columna geometry) para poder luego calcular la distancia propiamente dicha.
+
+Vamos a traer la información de las plazas asociada al resultado que tuvimos con `st_nearest_feature()`.
+
+```{r, echo=TRUE, message=FALSE}
+plazas_c[st_nearest_feature(radios_c, plazas_c),][1:5]
+
+nrow(plazas_c[st_nearest_feature(radios_c, plazas_c),])
+```
+
+Presten atención a la longitud de filas que devuelve este filtro, es 3554, la misma cantidad de observaciones que radios_c. Si bien estamos usando el dataframe plazas_c lo que le pedimos a R es que traiga los valores asociados sobre la función `st_nearest_feature`, que devolvía para cada index de radios_c el index de plaza_c más cercana.
+
+Perfecto, ya tenemos un nuevo dataframe de plazas cercanas a los radios el cual está ordenado de modo tal que el primer elemento de radios_c tiene como plaza más cercana al resultado de este filtro.
+
+Por último nos resta calcular, lo cual hacemos con `st_distance`.
+El primer elemento de la función es el punto de origen, en este caso el centroide del radio censal, y el segundo elemento es el centroide de la plaza más cercana, el cual obtuvimos en los pasos anteriores. Luego le decimos a R que aplique la función elemento por elemento, es decir que calcule la distancia del primer elemento de radios_c al primer elemento de `plazas_c[st_nearest_feature(radios_c, plazas_c),]`, que como sabemos es su plaza más cercana.
+
+```{r, echo=TRUE, message=FALSE}
+st_distance(radios_c, plazas_c[st_nearest_feature(radios_c, plazas_c),], by_element = TRUE)[1:2]
+```
+
+Perfecto! Ya tenemos el listado con las distancias calculadas! Ahora sólo resta agregarlas al dataframe de radios. Recordemos que el objetivo es hacer un choropleth map con la distancia de los radios a las plazas.
+
+```{r, echo=TRUE, message=FALSE}
+radios <- radios %>% 
+  mutate(distancia=st_distance(radios_c, plazas_c[st_nearest_feature(radios_c, plazas_c),], by_element = TRUE)) %>% 
+  mutate(distancia=as.numeric(distancia))
+
+```
+
+Al mapa directo.
+
+```{r, echo=TRUE, message=FALSE}
+ggplot() + 
+  geom_sf(data = radios, aes(fill = distancia), color = NA) +
+  scale_fill_viridis_c() +
+  labs(title = "Distancia a plaza más cercana",
+       subtitle = "Ciudad Autónoma de Buenos Aires",
+       fill = "Distancia a plaza más cercana")+
+  theme_void()
+```
+
+Genial!
+Si queremos podemos quedarnos sólo con los radios censales que están a menos de 500 metros.
+
+```{r, echo=TRUE, message=FALSE}
+ggplot() + 
+  geom_sf(data = filter(radios,distancia<501), aes(fill = distancia), color = NA) +
+  scale_fill_viridis_c() +
+  labs(title = "Radios censales a menos de 500 metros de una plaza",
+       subtitle = "Ciudad Autónoma de Buenos Aires",
+       fill = "Distancia a plaza más cercana")+
+  theme_void()
+```
+
+Ok. Muy lindo el mapa pero ¿de cuántas personas estamos hablando?
+
+```{r, echo=TRUE, message=FALSE}
+radios %>% 
+  group_by(distancia>500) %>% 
+  summarise(total=sum(POBLACION),
+            pct=total/sum(radios_c$POBLACION))
+```
+
+El 65% de la población de Buenos Aires está a menos de 500 metros de una plaza, mientras que el 35% no.
