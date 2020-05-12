@@ -39,11 +39,10 @@ library(tidyverse)
 library(ggmap)
 library(sf)
 
-setwd("C:/Users/Marto/DataScience/clase-mapas-r-salud")
 
 #Cargamos
-radios <- st_read('./data/caba_radios.geojson')
-plazas <- st_read("./data/espacios-verdes-catastrales.geojson")
+radios <- st_read('https://github.com/martoalalu/clase-geo-salud/raw/master/data/caba_radios.geojson')
+plazas <- st_read("https://github.com/martoalalu/clase-geo-salud/raw/master/data/espacios-verdes-catastrales.geojson")
 
 
 ggplot() +
