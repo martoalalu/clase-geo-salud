@@ -34,8 +34,8 @@ Al momento de manipular datos geográficos es sumamente importante saber con qu�
 En cuanto a tipos de datos geográficos encontramos 3:
 
 * **Puntos:** Indica la posición exacta de un elemento (hospitales, reclamos, etc.). Está formado por sólo un par de coordenadas (X,Y)
-* **Líneas:** Indica un recorrido (calles, ríos,etc.). Está formado por una secuencia de pares de coordenadas (X,Y)
-* **Polígonos:** Indica el área / superficie de un elemento (barrio, área hospitalaria, etc.). Está formado por una secuencia de pares de coordenadas. 
+* **Líneas:** Indica un recorrido (calles, ríos,etc.). Está formado por una secuencia de pares de coordenadas (X,Y) que no delimitan un área.
+* **Polígonos:** Indica el área / superficie de un elemento (barrio, área hospitalaria, etc.). Está formado por una secuencia de pares de coordenadas que empiezan y terminan en el mismo punto, generando así un área cerrada, delimitada.
 
 <center>
 ![Tipos de geometrías](geometrias.jpg)
@@ -50,7 +50,9 @@ library(sf)
 library(tidyverse)
 ```
 
-# Datos geo
+# Analisis espacial
+
+El análisis espacial es un sub conjunto dentro del análisis de datos, que tiene como objetivo entender, describir, analizar, modelar, predecir la ubicación en el espacio de nuestra unidad de análisis. La premisa principal es que la ubicación per se es ya un elemento sumamente importante para comprender el fenómeno.
 
 Conseguir datos geográficos es relativamente fácil hoy en día. Hay muchísimos fuentes de información que disponibilizan este tipo de datos:
 
@@ -194,7 +196,7 @@ ggplot() +
   guides(fill=FALSE)
 ```
 
-Siguiendo con la coyuntura vamos a usar datos de covid a nivel barrio en la Ciudad de Buenos Aires que recopila [Sistema Mapache en su github](https://github.com/SistemasMapache/Covid19arData) a partir de los boletínes epidemiológicos semanales.
+Siguiendo con la coyuntura vamos a usar datos de covid a nivel barrio en la Ciudad de Buenos Aires que publica el Gobierno de la Ciudad en su portal de datos abiertos [BA Data](https://data.buenosaires.gob.ar).
 
 Vamos a leer el archivo como hacemos con cualquier dataframe *no-geográfico*.
 
