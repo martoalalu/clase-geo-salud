@@ -2,7 +2,7 @@
 title: "Clase 2: Operaciones Espaciales"
 subtitle: "Analisis espacial con R"
 author: "Martín Alalú"
-date: "29/04/2020"
+date: "29/04/2021"
 output: 
   html_document:
     fig_height: 8
@@ -41,7 +41,9 @@ library(sf)
 library(tidyverse)
 library(units) 
 
-prov <- read_sf("clase-geo-salud/data/ar_provincias.geojson")
+options(scipen = 999)
+
+prov <- read_sf("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/clase-2021/data/ar_provincias.geojson")
 ```
 
 Veamos qué información tiene.
@@ -221,27 +223,28 @@ A no desesperarse! Una de las bondades de los datos geográficos es que podemos 
 Cargamos un nuevo dataframe con el polígono de la Ciudad de Buenos Aires.
 
 ```{r}
-caba <- filter(prov, provincia == "Ciudad de Buenos Aires")
+caba <- read_sf("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/clase-2021/data/caba.geojson")
 
 ggplot(caba) +
   geom_sf()
 ```
 
 
-le indicamos nuestro objeto geográfico a filtrar y luego el dataframe con el que filtrar, en este caso el df de barrios de la Ciudad.
+Queremos quedarnos solo con los efectores de salud (puntos) que caen dentro de la Ciudad de Buenos Aires (polígono).
+Entonces indicamos nuestro objeto geográfico a filtrar (efectores de salud) y luego el dataframe con el que filtrar (poligono de Buenos Aires).
 
 ```{r}
 #Nos quedamos solo con los efectores de salud que están dentro de barrios
-salud_caba <- st_intersection(salud, barrios)
+salud_caba <- st_intersection(salud, caba)
 ```
 
-La consulta espacial dio como resultado un nuevo dataframe que nos indica que en la Ciudad de Buenos Aires hay 1154 efectores de salud.
+La consulta espacial dio como resultado un nuevo dataframe que nos indica que en la Ciudad de Buenos Aires hay 1165 efectores de salud.
 
-Ahora sí, volvamos al mapa. Al igual que en cualquier gráfico de `ggplot()` podemos combinar capas. Vamos a agregar una capa con los barrios detrás para tener la referencia.
+Ahora sí, volvamos al mapa. Al igual que en cualquier gráfico de `ggplot()` podemos combinar capas. Vamos a agregar una capa el polígono de la Ciudad de Buenos Aires detrás para tener la referencia.
 
 ```{r}
 ggplot()+
-  geom_sf(data=barrios)+
+  geom_sf(data=caba)+
   geom_sf(data=salud_caba)
 ```
 
@@ -255,7 +258,7 @@ Volvamos al mapa, pero profundizando el análisis. Vamos a pintar cada efector s
 
 ```{r}
 ggplot()+
-  geom_sf(data=barrios)+
+  geom_sf(data=caba)+
   geom_sf(data=salud_caba, aes(color=ORIGEN_FINANCIAMIENTO))
 ```
 
@@ -263,12 +266,10 @@ Para emprolijar podemos hacer *facetar* el mapa, al igual que con cualquier visu
 
 ```{r}
 ggplot()+
-  geom_sf(data=barrios)+
+  geom_sf(data=caba)+
   geom_sf(data=salud_caba, aes(color=ORIGEN_FINANCIAMIENTO))+
   facet_wrap(~ORIGEN_FINANCIAMIENTO)
 ```
-
-Vamos con otro ejercicio ¿Cómo sería si quisieramos hacer un nuevo mapa choropleth con la cantidad de efectores de salud con internación por barrio?
 
 
 # Más allá del choropleth
@@ -277,8 +278,7 @@ Hagamos otros tipos de mapas. Tener ubicaciones exactas, es decir objetos que so
 
 Dejemos de usar un rato la librería **sf** y vamos a considerar nuestro dataframe de efectores de salud en Buenos Aires como cualquier otro *no geográfico*. 
 
-Antes con `st_as_coord()` habíamos transformado las columnas de *latitud* y *longitud* en una **geometry** ahora vamos a reestablecer esas columnas.
-
+Antes con `st_as_coord()` habíamos transformado las columnas de *latitud* y *longitud* en una **geometry** ahora vamos a reestablecer esas columnas, o sea vamos a hacer que dejen de ser columnas geográficas y ser sólo "numéricas".
 
 ```{r}
 #Reestablecemos las columnas lat y long con sus coordenadas
@@ -297,6 +297,7 @@ Volvamos a **ggplot()** y hagamos un geom_point() tradicional.
 
 ```{r}
 ggplot() +
+  geom_sf(data=caba) +
   geom_point(data = salud_caba, aes(x = long, y = lat,color = ORIGEN_FINANCIAMIENTO))
 ```
 
@@ -306,86 +307,218 @@ Un mapa de densidad de puntos que muestre las zonas con mayor concentración de 
 
 ```{r}
 ggplot() +
+    geom_sf(data=caba) +
     geom_bin2d(data = salud_caba, aes(x = long, y = lat), bins = 50) +
     scale_fill_viridis_c()+
     labs(title = "Concentración de efectores de salud",
          fill = "Cantidad")
 ```
 
-A todo esto siempre estuvimos trabajando con puntos y polígonos asumiendo que el fondo es Buenos Aires. Pero podemos agregar una capa base que tenga el mapa de Buenos Aires.
-
-Para eso vamos a usar las librerías `ggmap` y `osmdata`, las cuales instalamos con el tradicional `install.packages("NOMBRE_LIBRERIA")` y agregamos con `library(NOMBRE_LIBRERIA)`. 
-Con estas nuevas librería podemos agregar capas de fondo muy fácilmente.
-
-Básicamente lo primero que tenemos que hacer es indicarle a R cuál es el limite, el *boundin gbox* del mapa que queremos descargarnos. Usamos la función `getbb` y le decimos que es "Ciudad Autónoma de Buenos Aires" ya que es el nombre oficial. Si estuvieramos haciendo un mapa de por ejemplo Rosario le indicaríamos "Rosario, Santa Fe, Argentina".
-
-Luego, con `get_stamenmap` le indicamos especialmente que nos descargue el mapa, en este caso el tipo de mapa que nos estamos descargando es el `toner-background`, pero si quieren otro tipo pueden chequear la página de [Stamen Maps](http://maps.stamen.com/#terrain/12/37.7706/-122.3782).
-
-Luego, en vez de usar ggplot() vamos a usar `ggmap()` pero no se preocupen la sintaxis sigue siendo la misma!
+Si no nos gusta que sean cuadrados pueden ser hexagonos!
 
 ```{r}
-library(ggmap)
-library(osmdata)
-
-#Indicamos cual es la ciudad de fondo que queremos
-bbox <- getbb("Ciudad Autónoma de Buenos Aires,Argentina")
-
-#Descargamos el mapa
-CABA <- get_stamenmap(bbox = bbox,
-                      maptype = "terrain",zoom=12)
-
-# Mapa solo
-ggmap(CABA)
+ggplot() +
+    geom_sf(data=caba) +
+    geom_hex(data = salud_caba, aes(x = long, y = lat), bins = 50) +
+    scale_fill_viridis_c()+
+    labs(title = "Concentración de efectores de salud",
+         fill = "Cantidad")
 ```
 
-Nos faltan los datos pero ahora sabemos con certeza que el fondo corresponde a Buenos Aires.
-
-Si no nos gusta este mapa podemos probar con otro, por ejemplo con `toner-background`.
+O bien, las zonas de calor pueden ser más estilo "curvas de nivel".
 
 ```{r}
-#Descargamos el mapa
-CABA <- get_stamenmap(bbox = bbox,
-                      maptype = "toner-background",zoom=12)
-
-ggmap(CABA)
-```
-
-Ahora si, agregemos los datos!
-
-```{r}
-ggmap(CABA)+
-  geom_bin2d(data = salud_caba, aes(x = long, y = lat), bins = 50) +
-    scale_fill_viridis_c()
-```
-
-Excelente!
-Ahora probemos con un mapa que muestre la misma información pero simulando curvas de nivel.
-
-```{r}
-
-ggmap(CABA) +
+ggplot() +
+  geom_sf(data=caba) +
   stat_density2d(data = salud_caba, aes(x = long, y = lat, fill=stat(level)),geom="polygon")+
   scale_fill_viridis_c()
+```
+
+
+# Calculando distancias
+
+Calcular distancias es una de las funciones espaciales más útiles ya que permite ver con claridad cómo la accesibilidad a distintos bienes y servicios se distribuye desigualmente en el espacio. En tiempos de coronavirus y cuarentena ésta cuestión cobró mayor relevancia ya que al limitarse la movilidad de las personas se cristalizan los patrones espaciales, haciendo que una parte de la población tenga un acceso privilegiado a bienes y servicios mientras que otra queda se ve obligada a trasladarse más para conseguir lo mismo (y por ende se expone más al virus).
+
+Una de las cuestiones que surgió fue la limitación para moverse a no más de 500 metros a la redonda. Analicemos esta medida en términos de acceso a un espacio verde, algo que la Organización Mundial de la Salud considera vital para el bienestar de la población. ¿Qué porción de la población de la Ciudad de Buenos Aires está a 500 metros de una plaza?
+
+Hagamos un choropleth map que muestre con mayor intensidad aquellos radios censales que están más cerca de una plaza.
+
+Para esto usaremos 2 datasets: radios censales y ubicación de espacios verdes, del portal de datos abiertos del Gobierno de la Ciudad de Buenos Aires.
+
+
+## Explorando los datos
+```{r datos, echo=TRUE, message=FALSE}
+#Cargamos los datos
+radios <- st_read('https://github.com/martoalalu/clase-geo-salud/raw/master/data/caba_radios.geojson')
+plazas <- st_read("https://github.com/martoalalu/clase-geo-salud/raw/master/data/espacios-verdes-catastrales.geojson")
+
+
+ggplot() +
+  geom_sf(data=plazas, fill="green")
+```
+
+Tenemos 1402 espacios verdes. Veamos qué categorías hay en el campo `TIPO_EV`.
+
+```{r, echo=TRUE, message=FALSE}
+unique(plazas$TIPO_EV)
+```
+
+Vemos que hay espacios verdes que son canteros, plazoletas o en autopistas. Nuestro objetivo es ver el acceso a espacios verdes en los que las personas puedan distenderse y realizar algún tipo de actividad, por eso vamos a quedarnos sólo con las plazas, parques, jardín botánico, bosque, reserva ecológica, parque deportivo y espacios verdes.
+
+```{r, echo=TRUE, message=FALSE}
+plazas <- filter(plazas,TIPO_EV %in% c("PLAZA","PARQUE","JARDÍN BOTÁNICO","BOSQUE","RESERVA ECOLÓGICA","ESPACIO VERDE","PARQUE DEPORTIVO", "ESPACIO PÚBLICO"))
+
+ggplot() +
+  geom_sf(data=plazas, fill="green")
+```
+
+## Del polígono al centroide
+
+Para calcular distancias necesitamos hacerlo de un punto exacto a otro. Necesitamos transformar nuestros polígonos (plazas y radios) en puntos exactos, para eso vamos a crear 2 nuevas capas que tengan el centroide de cada plaza y radio. Con `st_point_on_surface` nos aseguramos que el punto caiga adentro del polígono.
+
+```{r, echo=TRUE, message=FALSE}
+plazas_c <- st_point_on_surface(plazas)
+radios_c <- st_point_on_surface(radios)
+```
+
+Volvamos al mapa.
+
+```{r, echo=TRUE, message=FALSE}
+ggplot() +
+  geom_sf(data=radios_c, size=0.5) +
+  geom_sf(data=radios, fill=NA) +
+  geom_sf(data=plazas, fill=NA) +
+  geom_sf(data=plazas_c, color="lightgreen")
+```
+
+## De un centroide a otro
+
+Perfecto. Ahora bien, lo que queremos hacer es para cada centroide del radio censal encontrar el centroide de la plaza más cercana, calcular su distancia y agregarla como columna al dataframe de radios.
+
+Se hace en pocas líneas pero vamos a explicarlo paso a paso
+
+Primero tenemos que pedirle a R que por cada centroide de radio censal busque el centroide de la plaza más cercana. Esto lo hacemos utilizando la función `st_nearest_feature`.
+
+```{r, echo=TRUE, message=FALSE}
+st_nearest_feature(radios_c,plazas_c)[1:5]
+
+radios_c[1,]
+plazas_c[283,]
+```
+
+Lo que nos devuelve es una lista en la que asocia el index de cada elemento de radios_c con el index más cercano de plazas_c. Así sabemos que el primer radio censal (index = 1, Radio_id = 1_1_1) tiene como plaza más cercana a la ubicada en el index = 283 (Plaza Canadá). 
+
+
+Lo que vamos a hacer es calcular distancia elemento por elemento y para ello necesitamos tener "parejas" de radios y plazas, que por cada radio haya sí o sí una plaza asociada. 
+Esto es sumamente útil ya que R va a agarrar el primer elemento de radios_c y va a calcular la distancia a su plaza asociada por orden, es decir uno a uno.
+
+Entonces el siguiente paso es tener un dataframe que no sólo tenga el index de la plaza más cercana a cada radio sino tener la información geográfica (especialmente la columna geometry) para poder luego calcular la distancia propiamente dicha.
+
+Vamos a traer la información de las plazas asociada al resultado que tuvimos con `st_nearest_feature()`.
+
+```{r, echo=TRUE, message=FALSE}
+plazas_c[st_nearest_feature(radios_c, plazas_c),][1:5]
+
+nrow(plazas_c[st_nearest_feature(radios_c, plazas_c),])
+```
+
+Presten atención a la longitud de filas que devuelve este filtro, es 3554, la misma cantidad de observaciones que radios_c. Si bien estamos usando el dataframe plazas_c lo que le pedimos a R es que traiga los valores asociados sobre la función `st_nearest_feature`, que devolvía para cada index de radios_c el index de plaza_c más cercana. Asi el index = 1 del df de radios tiene como plaza más cercana al primer valor del calculo reciente (el index 283 de plazas, el object_id = 17, la plaza Canadá).
+
+Perfecto, ya tenemos un nuevo dataframe de plazas cercanas a los radios el cual está ordenado de modo tal que el primer elemento de radios_c tiene como plaza más cercana al resultado de este filtro. 
+
+Lo que nos falta es saber la distancia en sí, lo cual hacemos con `st_distance`.
+El primer elemento de la función es el punto de origen, en este caso el centroide del radio censal, y el segundo elemento es el centroide de la plaza más cercana, el cual obtuvimos en los pasos anteriores. Luego le decimos a R que aplique la función elemento por elemento, es decir que calcule la distancia del primer elemento de radios_c al primer elemento de `plazas_c[st_nearest_feature(radios_c, plazas_c),]`, que como sabemos es su plaza más cercana.
+
+Veamos lo que devuelve esta función para 2 registros nada más.
+
+```{r, echo=TRUE, message=FALSE}
+st_distance(radios_c, plazas_c[st_nearest_feature(radios_c, plazas_c),], by_element = TRUE)[1:2]
+```
+
+Perfecto! Ya tenemos el listado con las distancias calculadas desde el centroide de los radios al centroide de las plazas!
+Recordemos que el objetivo es hacer un choropleth map con la distancia de los radios a las plazas, y para eso necesitamos polígonos, no puntos. Necesitamos que los centroides de los radios vuelvan a ser polígonos.
+
+Aca vamos a hacer un truquito. Como el largo del df de poligonos de radios es el mismo que el de los centroides (porque fue una transformación del primero) vamos a calcular las distancias entre el centroide de los radios y el de las plazas pero el resultado de esta operación lo vamos a agregar como columna en el dataframe de poligonos de radios censales.
+Como tiene el mismo largo R ni se va a enterar y nos va a dejar agregarlo sin problema!
+
+(Acá tengan un toque de paciencia!)
+
+```{r, echo=TRUE, message=FALSE}
+radios <- radios %>% #Tomamos de base el df poligonos de radios censales
+  mutate(distancia=st_distance(radios_c, plazas_c[st_nearest_feature(radios_c, plazas_c),], by_element = TRUE)) %>% #Agregamos columna nueva con los valores del calculo de distancia entre centroidoes ;)
+  mutate(distancia=as.numeric(distancia)) #Convertimos a número
 
 ```
 
-Facetemos!
+Miremos como quedó el dataframe de radios.
+```{r}
+head(radios)
+```
+
+Excelente, tenemos una columna nueva (distancia) con un número que nos va a permitir hacer nuestro querido choropleth.
+
+Al mapa directo entonces.
+
+```{r, echo=TRUE, message=FALSE}
+ggplot() + 
+  geom_sf(data = radios, aes(fill = distancia), color = NA) +
+  scale_fill_viridis_c() +
+  labs(title = "Distancia a plaza más cercana",
+       subtitle = "Ciudad Autónoma de Buenos Aires",
+       fill = "Distancia a plaza más cercana")+
+  theme_void()
+```
+
+Genial!
+Si queremos podemos quedarnos sólo con los radios censales que están a menos de 500 metros.
+
+```{r, echo=TRUE, message=FALSE}
+ggplot() + 
+  geom_sf(data = filter(radios,distancia < 501), aes(fill = distancia), color = NA) +
+  scale_fill_viridis_c() +
+  labs(title = "Radios censales a menos de 500 metros de una plaza",
+       subtitle = "Ciudad Autónoma de Buenos Aires",
+       fill = "Distancia a plaza más cercana")+
+  theme_void()
+```
+
+Ok. Muy lindo el mapa pero ¿de cuántas personas estamos hablando?
+
+```{r, echo=TRUE, message=FALSE}
+radios %>% 
+  st_drop_geometry() %>% 
+  group_by(distancia > 500) %>% 
+  summarise(total = sum(POBLACION),
+            pct= total / sum(radios_c$POBLACION)) 
+
+```
+
+El 64% de la población de Buenos Aires está a menos de 500 metros de una plaza, mientras que el 36% no.
+
+Por último podemos hacer un histograma para ver cómo se distribuye la distancia.
 
 ```{r}
-ggmap(CABA) +
-  stat_density2d(data = salud_caba, aes(x = long, y = lat, fill=stat(level)),geom="polygon")+
-  scale_fill_viridis_c()+
-  facet_wrap(~ORIGEN_FINANCIAMIENTO)
+ggplot(radios) +
+  geom_histogram(aes(distancia))
 ```
 
-Al parecer los privados se concentran claramente en el centro, y de destaca también una concentración alta en la parte norte de la capital, mientras que los establecimientos públicos no tienen una concentración clara.
-
-Por último hagamos un mapa de burbujas, donde el tamaño de cada punto que representa al efector está dado por la cantidad de casos de covid que tuvo el barrio en el que está.
+Y lo podemos facetar por comuna...
 
 ```{r}
-ggmap(CABA) +
-  geom_point(data = filter(salud_caba,ORIGEN_FINANCIAMIENTO=="Público"), aes(x = long, y = lat, size=total), color="red")
-  
+ggplot(radios) +
+  geom_histogram(aes(distancia)) +
+  facet_wrap(~COMUNA, scales="free_y")
+
 ```
 
 
+# Repaso
+
+Y asi llegamos al final de la segunda clase donde tuvimos un pantallazo de las operaciones espaciales más comúnes:
+
+* Área -> st_area
+* Perímetro -> st_length
+* Intersección -> st_intersection
+* Convertir polígonos en puntos -> st_point_on_surface
+* Encontrar el objeto más cercano -> st_nearest_feature
+* Distancia -> st_distance
