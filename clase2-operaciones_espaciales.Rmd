@@ -1,5 +1,6 @@
 ---
-title: "Mapeando datos en R"
+title: "Clase 2: Operaciones Espaciales"
+subtitle: "Analisis espacial con R"
 author: "Martín Alalú"
 date: "29/04/2020"
 output: 
@@ -21,231 +22,158 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
 ```
 
-# Intro datos geo
+# Operaciones espaciales
 
-Hoy en día vemos mapas por todos lados. Si hay datos, entonces hay un mapa. De hecho se dice que el 80% de los datos tiene componente geo, o sea que casi todo puede ser ubicado en un mapa! Twitts, fotos de IG, pacientes, hospitales, comercios, noticias, etc, todo puede ser ubicado en un mapa.
+Hay una enorma cantidad de operaciones que se le pueden hacer a los objetos geográficos. Calcular el área, el perímetro, el largo, distancias entre objetos, intersecciones, uniones, diferencias, realizar transformaciones y más!
+Estas manipulaciones son sumamente útiles ya que nos permitirán comprender mejor el fenómeno que estamos analizando.
 
-El atributo que distingue a los datos georreferenciados es que representan ubicaciones exactas sobre la superficie de la Tierra. Es decir que cómo mínimo un dato georreferenciado tiene un par de coordenadas (X,Y) que representan la ubicación de un elemento en la superficie terrestre. Latitud y longitud es el **sistema de coordenadas de referencia** más usado hoy en día (CRS).
-
-Otro concepto importante al momento de trabajar con datos geográficos es el de **proyección cartográfica**. Transformar una esfera (la tierra) en un plano (mapa) es todo un tema, no hay una única forma de hacerlo. La proyección cartográfica indica la serie de instrucciones que aplicamos para pasar a 2 dimensiones los distintos elementos de la esfera terrestre. Es por esto que hay muchísimas proyecciones cartográficas, y todas tienen ventajas y desventajas.
-
-Al momento de manipular datos geográficos es sumamente importante saber con qué **sistema de coordenadas de referencia** y la **proyección cartográfica** fueron creados así podemos compararlos y trabajar con ellos adecuadamente.
-
-En cuanto a tipos de datos geográficos encontramos 3:
-
-* **Puntos:** Indica la posición exacta de un elemento (hospitales, reclamos, etc.). Está formado por sólo un par de coordenadas (X,Y)
-* **Líneas:** Indica un recorrido (calles, ríos,etc.). Está formado por una secuencia de pares de coordenadas (X,Y) que no delimitan un área.
-* **Polígonos:** Indica el área / superficie de un elemento (barrio, área hospitalaria, etc.). Está formado por una secuencia de pares de coordenadas que empiezan y terminan en el mismo punto, generando así un área cerrada, delimitada.
-
-<center>
-![Tipos de geometrías](geometrias.jpg)
-</center>
+Para más información de todas las operaciones posibles (o las principales) sugerimos revisar el [capítulo 4 del libro Geocomputation with R](https://geocompr.robinlovelace.net/spatial-operations.html).
 
 
-Para manipular datos geográficos en R vamos a usar la librería **sf**, una de las más populares en R y con [muchísimas funciones disponibles](https://r-spatial.github.io/sf/reference/index.html). Al igual que con el resto de los paquetes de R lo instalamos usando *install.packages(sf)* y lo llamamos con *library(sf)*.
+# Área, perímetro e intersección
 
+Como siempre comenzamos cargando las librerías que vamos a usar. Recuerden que si no las tienen instaladas aún lo pueden hacer con *install.packages("NOMBRE_LIBRERIA")*.
+
+De paso cargamos un dataframe geográfico (formato .shp) que tiene los polígonos de las provincias de Argentina.
 
 ```{r Cargamos librerias, echo=TRUE, message=FALSE}
-library(sf)
+library(sf) 
 library(tidyverse)
+library(units) 
+
+prov <- read_sf("clase-geo-salud/data/ar_provincias.geojson")
 ```
 
-# Analisis espacial
-
-El análisis espacial es un sub conjunto dentro del análisis de datos, que tiene como objetivo entender, describir, analizar, modelar, predecir la ubicación en el espacio de nuestra unidad de análisis. La premisa principal es que la ubicación per se es ya un elemento sumamente importante para comprender el fenómeno.
-
-Conseguir datos geográficos es relativamente fácil hoy en día. Hay muchísimos fuentes de información que disponibilizan este tipo de datos:
-
-* [**Instituto Geográfico Nacional**](https://www.ign.gob.ar/NuestrasActividades/InformacionGeoespacial/CapasSIG)
-* [**BA Data**](http://data.buenosaires.gob.ar/)
-* [**Datos Argentina**](http://datos.gob.ar/)
-
-En cuanto a formatos de archivos geográficos principalmente encontraremos 3: *CSV*, *Shapefile (SHP)* y *GeoJson*.
-
-En esta ocasión trabajaremos con un archivo en formato GeoJson que tiene los radios censales de la Ciudad de Buenos Aires, descargado del [portal de datos abiertos de la Ciudad](http://data.buenosaires.gob.ar/). Los radios son unidades geográficas que agrupan en promedio 300 viviendas en las ciudades y se usan para relevar información en el terreno. En los censos los radios son la unidad geográfica mínima en la que se publica información referida a población, hogares y viviendas.
-
-```{r Cargando datos, echo=FALSE}
-
-#Cargamos los datos
-radios <- st_read('https://github.com/martoalalu/clase-geo-salud/raw/master/data/caba_radios.geojson')
-```
-
-Con solo cargar el archivo ya R nos da información valiosa sobre este archivo:
-
-* **`Simple feature collection with 3554 features and 8 fields`** ya nos indica que el archivo en cuestión tiene 3554 observaciones y 8 columnas.
-* **`geometry type: MULTIPOLYGON`** indica que el archivo geografico tiene multiples poligonos (en este caso radios censales)
-* **`dimension: XY`** indica que tiene 2 dimensiones (o sea que no hay una tercera dimensión "Z")
-* **`bbox`** indica el *bounding box*, la caja que delimita y contiene a los datos en cuestión. Son los valores máximos y mínimos de las coordenadas.
-* **`CRS: 4326`** indica el sistema de coordenadas de referencia en que están los datos. En este caso es el famoso WGS84. 
-
-Al fin y al cabo un dato geográfico es como cualquier dataframe solo que tiene un campo con la información de la geometría. Por eso vamos a ver inspeccionar qué tiene el dataframe *radios*.
-
-```{r Inspeccionando, echo=TRUE, message=FALSE}
-head(radios)
-
-summary(radios)
-```
-
-El dataset tiene un montón de información valiosa que podemos desplegar en un mapa.
-Vamos con el primero.
-
-#  De la tabla al mapa
-
-Bueno, ya basta de tablas, vamos al mapa!
-Vamos con una pregunta fácil. ¿Cómo se distribuye la población a lo largo y ancho de la Ciudad? ¿Donde hay más densidad poblacional?
-
-Para hacerlo vamos a seguir utilzando la sintaxis de **ggplot()** pero indicando que ahora estamos trabajando con un dato geográfico, para eso vamos a usar **geom_sf()** como parámetro.
-
+Veamos qué información tiene.
 ```{r echo=TRUE, message=FALSE}
-ggplot() +
-  geom_sf(data=radios)
+head(prov)
 ```
 
-Bien! Tal como podemos ver hay radios censales más grandes que otros, pero generalmente mantienen el mismo tamaño en este caso.
-Vamos con un primer mapa coloreando los radios censales según el barrio.
+Ok, sólo el nombre y el campo de geometría, obvio.
+Hagamos un mapa!
 
 ```{r}
-ggplot() + 
-  geom_sf(data = radios, aes(fill = BARRIO))
+ggplot(prov) +
+    geom_sf()
 ```
 
-Uuu! Tenemos muchísimas variables y no podemos ver el mapa!
-Saquemos la referencia.
+Podemos rellenar cada provincia con un color distinto.
 
 ```{r}
-ggplot() + 
-  geom_sf(data = radios, aes(fill = BARRIO))+
-  guides(fill=FALSE)
+ggplot(prov) +
+    geom_sf(aes(fill=provincia))
 ```
 
-
-Ahora bien, intentemos encontrar algunos patrones haciendo un [mapa coroplético](https://es.wikipedia.org/wiki/Mapa_coropl%C3%A9tico) (*choropleth*)
-Vamos con un simple mapa que muestre la cantidad de población por radio así vemos las zonas más pobladas de la Ciudad. Para eso vamos a agregar nuevos parámetros a nuestro ggplot() y de paso agregamos un título.
+Ok. Ahora sí, empecemos a agregarle información a este dataframe.
+Calcular el área es muy simple con la función **st_area** de la librería **sf**.
 
 ```{r}
-ggplot() + 
-  geom_sf(data = radios, aes(fill = POBLACION)) +
-  labs(title = "Población por radio censal",
-       subtitle = "Ciudad de Buenos Aires",
-       fill = "Habitantes")
+st_area(prov) #nos devuelve en unidades raras, pasamos a km2
 ```
 
-Ahí va mejor. Pero las líneas grises de los límites de los radios son algo molestas, vamos a sacarlas indicandole que no queremos ningún color poniendo **`color = NA`**. 
-Como estamos trabajando con mapas a veces la referencia de los ejes X e Y con la latitud y la longitud no nos interesa mucho, para sacarlas podemos directamente aplicar un *theme* que haga el mapa más "limpio".
+Mmm suenan raros estos números. Pasemos la unidad de medición a kilómetros cuadrados!
 
 ```{r}
-ggplot() + 
-  geom_sf(data = radios, aes(fill = POBLACION), color = NA) +
-  labs(title = "Población por radio censal",
-       subtitle = "Ciudad de Buenos Aires",
-       fill = "Habitantes")+
-  theme_void()
+set_units(st_area(prov), km^2)
 ```
 
-Va quedando pero tampoco podemos sacar una conclusión clara sobre la distribución de la población en la Ciudad. Vemos algunos radios grandes que tienen mucha población (al sur en Villa Lugano o en el centro el de Chacarita) y otros que tienen poca (Bosques de Palermo y el Autódromo).
+Ahí va mejor. Pero seguimos sin saber a qué provincia corresponde cada registro. Lo pasamos a formato numérico y agregamos como columna nueva!
 
-Vamos a aprovechar que una columna indica la superficie del radio en km2 y otra la población y vamos a crear una nueva columna que indique la densidad poblacional de cada radio, su población por km2.
-Seguimos aprovechando las bondades de tidyverse y usamos `mutate`.
-
-Además vamos a cambiar la escala de cólores y usar **[viridis]**(https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html), también muy usada, y que nos permitirá destacar mejor los patrones escondidos en los datos. El parámetro `scale_fill_viridis_c()` nos va a dejar hacer esto.
 
 ```{r}
-#Creamos nueva columna con densidad poblacional por barrio
-radios <- radios %>% 
-  mutate (densidad=POBLACION/AREA_KM2)
-
-#Mapa según densidad de población usando viridis como escala de colores
-ggplot() + 
-  geom_sf(data = radios, aes(fill = densidad), color = NA) +
-  scale_fill_viridis_c() +
-  labs(title = "Densidad de población por radio censal",
-       subtitle = "Ciudad Autónoma de Buenos Aires",
-       fill = "hab/km2")+
-  theme_void()
+prov$area <- as.numeric(set_units(st_area(prov), km^2))
+prov
 ```
 
-Ahora sí podemos ver algunos patrones. El corredor Cabildo-Santa Fe, Rivadavia y Pueyrredón emergen como zonas más densamente pobladas al igual que varios barrios vulnerables (31, 1-11-14, 21, Soldati).
-
-
-# Coyuntura.. ¿¡o qué!? v2
-
-Al igual que con cualquier dataframe podemos hacer agrupaciones de datos geográficos y "unir" polígonos según determinado criterio. Esto es sumamente útil cuando queremos pasar a trabajar con otras unidades geográficas.
-
-Por ejemplo vamos a transformar este dataframe donde cada unidad es un radio censal a uno donde sean los barrios (o sea que pasaríamos de tener 3554 observaciones a 48). 
-Para hacer esto usamos los conocidos `group_by()` y `summarise()`.
+Bien! Ahora que tenemos una columna con el área podemos hacer un mapa coloreando cada provincia según los km2.
 
 ```{r}
-barrios <- radios %>% 
-    group_by(BARRIO) %>% 
-    summarise(POBLACION = sum(POBLACION),
-              VIVIENDAS = sum(VIVIENDAS),
-              HOGARES = sum(HOGARES),
-              HOGARES_NBI = sum(HOGARES_NBI),
-              AREA_KM2 = sum(AREA_KM2))
-
-head(barrios)
+ggplot(prov) +
+  geom_sf(aes(fill=area))
 ```
 
-Y veamos cómo queda el nuevo mapa de barrios.
+Mmm está mal, pero no tan mal. Lo que ya sabíamos, la Provincia de Buenos Aires es la más grande del país, pero también se ve cierto patrón, a medida que pasamos de Norte a Sur el gradiente se ve más claro, o sea que las provincias suelen ser más grandes...
+
+Hagamos un gráfico de barras para ver este patrón.
 
 ```{r}
-ggplot() + 
-  geom_sf(data = barrios, aes(fill = BARRIO), color = NA) +
-  labs(title = "Barrios de la Ciudad de Buenos Aires")+
-  theme_void()+
-  guides(fill=FALSE)
-```
-
-Siguiendo con la coyuntura vamos a usar datos de covid a nivel barrio en la Ciudad de Buenos Aires que publica el Gobierno de la Ciudad en su portal de datos abiertos [BA Data](https://data.buenosaires.gob.ar).
-
-Vamos a leer el archivo como hacemos con cualquier dataframe *no-geográfico*.
-
-```{r}
-#Leemos el archivo
-covid <- read.csv(file = "https://raw.githubusercontent.com/martoalalu/clase-geo-salud/clase-2021/data/covid_barrios_caba.csv", sep=",")
-
-summary(covid)
-head(covid)
-```
-
-Vamos a intentar hacer un mapa que indique la cantidad de casos de covid por barrio. El problema es que propiamente dicho este dataframe no es geográfico ya que no tiene una columna con la geometría del barrio.  Pero tenemos la columna *localidad* que indica el barrio por lo que podemos aprovechar y hacer un `join` con nuestro dataframe geográfico de barrios.
-
-```{r}
-#Hacemos join
-barrios <- left_join(barrios,covid,by = c("BARRIO" = "barrio"))
-
-head(barrios)
-```
-
-Genial. Ahora tenemos un dataframe geográfico con cantidad de casos de covid por barrio. Vamos a hacer un nuevo mapa cloroplético con la tasa de covid cada 10.000 habitantes.
-
-```{r}
-barrios <- barrios %>% 
-  mutate(tasa_covid=(total/POBLACION)*10000)
-
-ggplot(data=barrios) + 
-  geom_sf(aes(fill = tasa_covid), color = NA) +
-  scale_fill_viridis_c() +
-  labs(title = "Casos covid por barrio cada 10000 habitantes",
-       subtitle = "Ciudad Autónoma de Buenos Aires",
-       fill = "Casos por cada 10000 habitantes")+
-  theme_void()
-
-```
-
-Flores emerge claramente como el barrio con la tasa más alta de covid por cada 10.000 habitantes. Núñez y Villa Real al oeste también. La zona sur parece la menos afectada por ahora.
-
-Si queremos salir de la perspectiva geográfica podemos hacer un gráfico de barras como con cualquier dataframe.
-
-```{r}
-ggplot(barrios) + 
-  geom_bar(aes(x= reorder(BARRIO, tasa_covid), weight=tasa_covid)) +
+ggplot(prov) + 
+  geom_bar(aes(x= reorder(provincia, area), weight=area, fill=area)) +
   coord_flip() 
 ```
 
-# Del polígono al punto
+Claro, al pasar del mapa al gráfico de barras perdemos la referencia geográfica. Agreguemos una columna con la región de la provincia para ver si las de la Patagonia suelen ser más grandes que las del Norte.
 
-Por ahora estuvimos manejando un tipo de dato geográfico (polígonos) y haciendo un estilo de mapas (coropléticos), probemos usando datos que sean puntos y hagamos otros tipos de mapas.
+```{r}
+prov <- prov %>% 
+  mutate(region =
+  case_when(
+        provincia %in% (c("Buenos Aires", "Córdoba", "La Pampa", "Entre Ríos", "Santa Fe", "Ciudad de Buenos Aires")) ~ "Pampeana",
+        provincia %in% (c("Mendoza", "San Luis", "San Juan")) ~ "Cuyo",
+        provincia %in% (c("La Rioja", "Catamarca", "Jujuy", "Salta", "Tucumán", "Santiago del Estero")) ~ "Noroeste",
+        provincia %in% (c("Corrientes", "Misiones", "Formosa", "Chaco")) ~ "Noreste",
+        TRUE ~ "Patagonia"
+        )
+  )
+
+ggplot(prov) + 
+  geom_bar(aes(x= reorder(provincia, area), weight=area, fill=region)) +
+  coord_flip() 
+
+```
+
+Ahí va mejor! Hay cierto patrón, 3 de las 4 provincias más grande son de la Patagonia y 5 de las 6 más chicas del Norte!
+Esto nos sirve para entender que al hacer análisis espacial a veces salir del mapa puede ser sumamente útil para ver patrones.
+
+Una más y listo. Agreguemos una línea vertical con la media del área de las provincias para ver cuáles están por encima y cuáles por debajo.
+
+```{r}
+ggplot(prov) + 
+  geom_bar(aes(x= reorder(provincia, area), weight=area, fill=region)) +
+ geom_hline(yintercept=mean(prov$area), linetype="dashed", 
+                color = "black", size=0.5) +
+  coord_flip() 
+```
+
+¿Qué conclusiones sacan ahora?
+
+Bueno, sigamos con el perímetro. La función es **st_length**.
+
+```{r}
+st_length(prov)
+```
+
+Vemos que la unidad de medida son metros, lo pasamos a km con solo dividirlo por 1000 y agregamos a columna nueva.
+
+```{r}
+prov$perimetro <- as.numeric(st_length(prov) / 1000)
+prov
+```
+
+Excelente! Ahora sí, al mapa.
+
+```{r}
+ggplot(prov) +
+  geom_sf(aes(fill=perimetro))
+```
+
+Y al gráfico de barras.
+
+```{r}
+ggplot(prov) + 
+  geom_bar(aes(x= reorder(provincia, perimetro), weight=perimetro, fill=region)) +
+ geom_hline(yintercept=mean(prov$perimetro), linetype="dashed", 
+                color = "black", size=0.5) +
+  coord_flip() 
+```
+
+
+# Intersecciones
+
+Otra de las operaciones espaciales más útiles es la de calcular intersecciones entre 2 objetos espaciales. Por ejemplo ver qué puntos (escuelas) caen dentro de un polígono (ej. barrio).
+Muchas veces la información disponible es de un universo mucho mayor a nuestro fenómeno de estudio y necesitamos hacer un recorte, ahí es dónde **st_intersects** nos puede ayudar.
+
+Asimismo por ahora estuvimos manejando un tipo de dato geográfico (polígonos) y haciendo un estilo de mapas (coropléticos), probemos usando datos que sean puntos y hagamos otros tipos de mapas.
 
 Vamos a usar un dataset disponibilizado por el Ministerio de Salud del Gobierno Nacional que contiene la ubicación exacta todos los efectores de salud del país.
 
@@ -284,9 +212,23 @@ ggplot()+
   geom_sf(data=salud)
 ```
 
-No tenemos los límites de Argentina pero claramente los puntos de los efectores parecen distribuirse en todo el país, es decir que no se limitan a aquellos que se ubican en Buenos Aires.
+No tenemos los límites de Argentina pero claramente los puntos de los efectores parecen distribuirse en todo el país.
+Pero nosotros queremos trabajar solo con datos de la Ciudad de Buenos Aires!
+Una opción es filtrar a través de un atributo "no-geográfico" como por ejemplo el nombre de la Provincia, pero en este caso no tenemos esa información!
 
 A no desesperarse! Una de las bondades de los datos geográficos es que podemos hacer consultas espaciales. En este caso vamos a pedirle a R que **espacialmente nos filtre y seleccione** todos los efectores de salud que caen dentro de algún barrio de Buenos Aires. Para eso usamos `st_intersection` una de las funciones espaciales de la librería **sf**.
+
+Cargamos un nuevo dataframe con el polígono de la Ciudad de Buenos Aires.
+
+```{r}
+caba <- filter(prov, provincia == "Ciudad de Buenos Aires")
+
+ggplot(caba) +
+  geom_sf()
+```
+
+
+le indicamos nuestro objeto geográfico a filtrar y luego el dataframe con el que filtrar, en este caso el df de barrios de la Ciudad.
 
 ```{r}
 #Nos quedamos solo con los efectores de salud que están dentro de barrios
