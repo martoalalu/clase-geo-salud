@@ -87,5 +87,10 @@ caba %>%
   st_write("clase-geo-salud/data/caba.shp")
 
 
+
 caba %>% 
   filter(NAME_1 == "Ciudad de Buenos Aires") %>%
+  
+  
+  
+  

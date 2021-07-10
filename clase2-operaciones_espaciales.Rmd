@@ -511,6 +511,63 @@ ggplot(radios) +
 
 ```
 
+# Yapa I: Contar puntos en polígonos
+
+Otra operación espacial bastante común es contar puntos en poligonos. ¿Cuántas plazas hay en cada radio censal?
+
+Usamos **st_join**, que es un join espacial, es decir que nos permite unir 2 dataframes a través de compartir algo en común, su ubicación. La función tiene 3 parámetros, los objetos geográficos que queremos unir y el método de join, en este caso queremos saber en qué radio están contenidas cada una de las 357 plazas entonces usamos **st_within**.
+
+En primer lugar vamos a ver a qué radio censal pertenece cada plaza. 
+
+```{r}
+st_join(plazas_c, radios, join = st_within)
+```
+
+Esta función nos devuelve un objeto geográfico (simple feature) con el radio censal al que pertenece cada una de las plazas. Por eso tenemos 357 registros, uno por cada plaza.
+
+Como uno de los campos es RADIO_ID podemos usar group_by y summarise para contar la cantidad de registros (plazas) que hay por cada radio censal!
+
+
+```{r}
+radios_plazas <- plazas_c %>% 
+            st_join(radios, join = st_within) %>% 
+            group_by(RADIO_ID) %>% 
+            count() %>% 
+          st_set_geometry(NULL) # removemos la geometría porque no la vamos a usar
+
+head(arrange(radios_plazas,desc(n)))
+```
+
+El radio que más plazas tiene es el 14_10_1 y tiene 19 plazas!
+
+Como lo que queremos hacer es un choropleth de plazas en radios ahora solo nos resta agregar la columna de cantidad de plazas al dataframe que tiene el polígono de los radios censales. 
+Hacemos un simple **left_join** por radio_id y listo!
+
+
+```{r}
+radios <- left_join(radios, radios_plazas)
+```
+
+Ahora sí vamos al mapa para ver la distribución espacial!
+
+```{r}
+ggplot() +
+  geom_sf(data=radios, aes(fill=n), color = NA) +
+  scale_fill_viridis_c() +
+  theme_void() +
+  labs(title = "Cantidad de plazas por radio censal",
+       subtitle = "Ciudad de Buenos Aires",
+       fill = "Plazas por radio censal",
+       caption = "Elaboración propia en base a datos de BA Data")
+```
+
+Listo!
+
+Dejamos algunas ideas para practicar:
+
+¿Cuál es el barrio que más plazas tiene?
+¿Podemos calcular la cantidad de plazas por km2?
+¿Cuál es el barrio que tiene más km2 de espacio verde por habitante?
 
 # Repaso
 
@@ -518,7 +575,9 @@ Y asi llegamos al final de la segunda clase donde tuvimos un pantallazo de las o
 
 * Área -> st_area
 * Perímetro -> st_length
-* Intersección -> st_intersection
+* Filtrar por ubicación -> st_intersection
 * Convertir polígonos en puntos -> st_point_on_surface
 * Encontrar el objeto más cercano -> st_nearest_feature
 * Distancia -> st_distance
+* Join espacial -> st_join
+* Quitar la espacialidad a un df -> st_set_geometry(NULL)
