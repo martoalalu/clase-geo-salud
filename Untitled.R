@@ -2,6 +2,9 @@ library(tidyverse)
 library(sf)
 
 
+
+
+
 #Con esto ves todas las capas disponibles en el servicio
 st_layers("WFS:https://geoservicios.indec.gob.ar/geoserver/wfs?getcapabilities")
 

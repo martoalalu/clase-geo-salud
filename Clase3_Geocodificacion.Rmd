@@ -1,0 +1,152 @@
+---
+title: "Geolocalizando"
+author: "Bourdin Elian"
+date: "19/7/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r , echo=TRUE, message=FALSE}
+library (tmaptools)
+library (RUMBA)
+library(tidyverse)
+library(sf)
+```
+
+
+# Geocodificando
+
+Pero... qué es geocodificar?
+
+Es el proceso de asignar coordenadas (ergo, localización espacial) a uno o varios atributos alfanuméricos que constituyen una dirección. Se requiere de 4 argumentos fundamentales para ello: Calle, Altura o número, Localidad y Estado o Provincia. Otros atributos mejoran la calidad y la precisión: Barrio, País, Código Postal, etc.
+
+Para geocodificar hacemos uso de APIs y servicios geográficos, en este caso, veremos cómo usar el de OpenStreetMap o también conocido como OSM (Nominatim)
+
+## OpenStreetMap
+
+[**OpenStreetMap**](https://www.openstreetmap.org/) es un proyecto colaborativo para crear mapas editables y libres. Los mapas se crean utilizando información geográfica capturada con dispositivos GPS móviles, ortofotografías y otras fuentes libres. Esta cartografía, tanto las imágenes creadas como los datos vectoriales almacenados en su base de datos, se distribuye bajo licencia abierta Licencia Abierta de Bases de Datos.
+
+Los contribuidores más entusiastas mapean barrios completos utilizando herramientas GPS para enviar información local completa, actualizada y precisa a OpenStreetMap. Varias empresas y entidades públicas que producen información geográfica también contribuyen al permitir que sus datos sean incluidos. Existen equipos profesionales de contribuidores que se coordinan para agregar y mantener actualizada información georeferenciada de límites políticos, calles, edificios, negocios y otros puntos de interés.
+
+Toda la información disponible en OpenStreetMap puede ser descargada y reutilizada por cualquier persona, ya sea accediendo al mapa online, obteniendo una copia completa de la base de datos, o accediendo a los datos vía API.
+
+Empecemos!
+
+Vamos a trabajar con datos de una base de datos de entros de salud municipales de Cordoba capital.
+
+```{r}
+getwd()
+Centros_Salud <- readxl::read_xlsx("clase-geo-salud/data/Listado_Centros_de_Salud_Municipales.xlsx")#deben colocar el directorio en el cual descomprimieron el archivo
+
+#vamos a explorar el objeto
+head (Centros_Salud)
+summary(Centros_Salud)
+
+#cuántos valores nulos tenemos en los datos de dirección?
+sum(is.na(Centros_Salud$Calle))
+sum(is.na(Centros_Salud$Altura)) #Tenemos varios valores nulos
+```
+
+Para acceder a las funcionalidades de la API usaremos la libería tmaptools, que tiene una amplia funcionalidad, entre ellas, conectarse a los servicios de OSM.
+
+```{r}
+# primero tenemos que construir el campo de dirección tal como lo requerimos
+Centros_Salud_Direccion <- Centros_Salud %>% 
+  mutate(Dir_completa = paste(Calle, Altura, ",", Localidad, ", Argentina"))
+
+#vamos a explorar el objeto
+head(Centros_Salud_Direccion)
+summary(Centros_Salud_Direccion)
+
+#cuántas direcciones tenemos?
+nrow (Centros_Salud_Direccion)
+```
+
+Vamos a geocodificar nuestras direcciones
+
+```{r}
+Centros_Salud_Direccion <- Centros_Salud_Direccion %>% 
+  mutate(geo=geocode_OSM(  #me devuelve las coordenadas (geocode_OSM) en un campo adicional a los originales
+    Centros_Salud_Direccion$Dir_completa,  
+    return.first.only = TRUE,  # me devuelve solo el primer resultado encontrado
+    keep.unfound = TRUE,  # que mantenga aquellas direcciones que No pudo geolocalizar, con un null en el campo "geo"
+    details = FALSE, # que no devuelva detalles, id de OSM u objetos cercanos
+    as.data.frame = NA,
+    as.sf = FALSE, # que lo deje como una tabla y no lo convierta en un spatial frame
+    geometry = "point", # que la geometría sea de tipo PUNTO (es decir, un par de coordenadas)
+    server = "https://nominatim.openstreetmap.org" # el servicio que deseo usar: Nominatim
+  ))
+
+#qué obtuvimos?
+head(Centros_Salud_Direccion)
+summary (Centros_Salud_Direccion$geo) #vamos a explorar el componente geo del objeto que nos devuelve OSM
+
+# Base final con coordenadas
+Centros_Salud_Direccion <- Centros_Salud_Direccion %>% 
+  mutate(lon=geo$lon, lat = geo$lat) %>% # el campo geo se arma como lista, tenemos que seleccionar una lon y una lat
+  select(`Centro de Salud`, Dir_completa, lon, lat)
+
+#exploremos el objeto final...
+summary (Centros_Salud_Direccion)
+
+
+#qué nos falta para que sea un objeto geográfico? Agregar el sistema de referencia!
+Centros_Salud_Direccion <- Centros_Salud_Direccion %>% 
+  filter(!is.na(lon), !is.na(lat)) %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+
+summary (Centros_Salud_Direccion)
+class(Centros_Salud_Direccion)
+
+```
+
+
+## USIG
+
+Hay otros servicios para trabajar datos!
+
+USIG es la Unidad de Sistemas de Información Geográfica del Gobierno de la Ciudad de Buenos Aires y brinda un servicio de geocodificación (entre otras cosas) de datos de la Ciudad de Buenos Aires de manera gratuita!!!
+
+La librería que nos facilita el uso de este servicio se llama RUMBA, la cual la instalamos con el clásico install.packages("RUMBA").
+
+RUMBA es un conjunto de herramientas para el análisis de la Región Urbana Metropolitana de Buenos Aires usando R. Incluye funciones que permiten obtener coordenadas precisas (longitud y latitud) que corresponden a direcciones dentro de los límites de la Región Urbana Metropolitana de Buenos Aires o bien de barrios vulnerables de la Ciudad de Buenos Aires.
+
+Las funciones consultan la API del Normalizador de direcciones y de Déficit Habitacional de la USIG. Ademas de las coordenadas, se obtiene la dirección normalizada (escrita de forma inequívoca).
+
+Les proponemos hacer un ejercicio con las postas de vacunación de CABA
+
+```{r}
+Postas_Vacunacion <-  readxl::read_xlsx("clase-geo-salud/data/postas_vacunacion_covid.xlsx")#deben colocar el directorio en el cual descomprimieron el archivo
+
+#vamos a explorar el objeto
+head(Postas_Vacunacion)
+summary(Postas_Vacunacion)
+```
+
+El dataframe tiene una columna que hace referencia a la dirección de los centros de vacunación. Pero no tenemos ni latitud ni longitud. Ya sabemos que podemos geocodificar los datos! Vamos a probar el servicio de la USIG.
+
+Con la función *mutate_USIG_geocode* podemos agregar las columnas de lon y lat y así tener las coordenadas. La dirección debe estar expresada como “calle altura, partido”, “calle altura, municipio”, “calle y calle, partido”, o “calle altura, municipio”. El partido o municipio son opcionales. De no ser aclarados, y encontrarse múltiples direcciones que coincidan con la búsqueda, se entregaran las coordenadas dentro de la Ciudad Autónoma de Buenos Aires (si existieran), o en su defecto las del primer partido -por orden alfabético- donde se haya encontrado la dirección.
+
+En resumen: es mejor incluir partido o municipio en las direcciones a georeferenciar.
+
+```{r, message=FALSE}
+Postas_Vacunacion_Direccion <- mutate_USIG_geocode(Postas_Vacunacion, "direccion") #paciencia. Puede tardar un poco! Utilizar la función es tan simple como indicar el DF y el nombre del campo que tiene la dirección que vamos a trabajar.
+
+#vamos a explorar el objeto
+head(Postas_Vacunacion_Direccion)
+summary(Postas_Vacunacion_Direccion)
+
+#Solo nos queda transformarlo a objeto geográfico
+Postas_Vacunacion_Direccion <- Postas_Vacunacion_Direccion %>% 
+  filter(!is.na(lon), !is.na(lat)) %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+
+summary (Postas_Vacunacion_Direccion)
+class(Postas_Vacunacion_Direccion)
+```
+
+
+

@@ -93,4 +93,68 @@ caba %>%
   
   
   
+  # Yapa II: Del punto al polígono
   
+  Asi como transformamos polígonos en puntos, ahora vamos a hacer lo inverso.
+Vamos a trazar un área de influencia de 200 metros alrededor de los centroides de las plaza. Esto se llama buffer, y es uno de los modos de convertir puntos en polígonos.
+
+La función se llama **st_buffer** y acepta 2 parámetros principales: los datos de input y la distancia (dist)..
+
+```{r}
+st_buffer(plazas_c, dist = 200)
+```
+
+R nos está advirtiendo algo muy importante. Como nuestra unidad de medida son grados (recordemos que la latitud y longitud se mide en grados de inclinación con el Ecuador y el meridiano de Greenwich), entonces el área de influencia (buffer) la va a hacer en grados también.
+
+O sea que nuestro buffer va a ser de 200º a la redonda de cada centroide de plaza!
+  Veamos como quedaría el mapa.
+
+```{r}
+ggplot() +
+  geom_sf(data = st_buffer(plazas_c, dist = 200))
+```
+
+No es lo que buscamos, nosotros queremos que el radio sea de 200 metros y para eso nuestra geometría tiene que estar expresadas en dicha unidad de medida.
+
+Para eso vamos a pasar nuestro CRS a coordenadas planas, aquellas que expresen su ubicación en metros. Como estamos usando datos de Buenos Aires vamos a usar el [CRS = 5347](https://epsg.io/5347).
+
+Dato: Si hubieramos usado datos de Argentina recomendamos usar el CRS = 5345.
+
+```{r}
+#Pasamos a un CRS con unidades en metros!
+plazas_c_caba <- st_transform(plazas_c, 5347)
+
+head(plazas_c_caba)
+```
+
+Ven como ahora cambió el campo de geometría. Las coordenadas no están más en grados (-34, 58).
+
+Al mapa!
+  ```{r}
+ggplot() +
+  geom_sf(data = st_buffer(plazas_c_caba, dist = 200))
+```
+
+Agreguemos la capa de barrios y algo de color.
+```{r}
+plazas_buffer <- st_buffer(plazas_c_caba, dist = 400)
+
+ggplot() +
+  geom_sf(data=radios) +
+  geom_sf(data = plazas_buffer, fill = 'seagreen2', color = 'seagreen', alpha = 0.5)
+```
+
+¿Y si queremos quedarnos solo con los radios que seal alcanzados por el radio?
+  st_intersection!
+  
+  ```{r}
+
+# radios_caba <- st_transform(radios, 5347)
+
+#Mapa
+
+ggplot() +
+  geom_sf(data=radios_caba[st_intersection(radios_caba,st_buffer(plazas_c_caba, 200), sparse = FALSE),]) +
+  geom_sf(data=st_buffer(plazas_c_caba, 200)) + 
+  theme_void()
+```
