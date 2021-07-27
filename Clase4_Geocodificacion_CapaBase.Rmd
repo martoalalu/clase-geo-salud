@@ -1,5 +1,5 @@
 ---
-title: "Geocodificando y capas base"
+title: "Geocodificando, capas base, mapas interactivos y ruteo"
 subtitle: "Analisis espacial con R"
 author: "Bourdin Elian"
 date: "19/7/2021"
@@ -19,16 +19,16 @@ editor_options:
 ---
 
 ```{r , echo=TRUE, message=FALSE, warning=FALSE}
-#library (tmaptools)
-detach("package:tmaptools", unload=TRUE)
+library (tmaptools)
 library (RUMBA)
 library (tidyverse)
 library (sf)
 library (ggmap)
+library(osmdata)
 ```
 
 
-# Geocodificando
+# Geocodificando con Open Street Map
 
 Pero... qué es geocodificar?
 
@@ -117,9 +117,280 @@ class(Centros_Salud_Direccion)
 ```
 
 
-## USIG
 
-Hay otros servicios para trabajar datos!
+# Agregando contexto a la información
+
+Pudimos geolocalizar gran parte de nuestras direcciones de interés, aunque ya vimos que no es un proceso infalible... pero cuando trabajamos con datos gegráficos es importante poder tener una referencia, ubicar los puntos en contexto, pero ¿Qué pasa cuando no tenemos un mapa?
+
+Tenemos una opción! Podemos agregar capas base, que sería como agregar "una foto" sobre la cual posicionaremos los datos de interés. 
+
+El primer paso para obtener las capas bases que necesitamos es obtener el *bounding box* del mapa que queremos descargar. ¿Qué utilizamos?... así es! *getbb*. En este caso obtendremos un mapa de la Ciudad Autónoma de Buenos Aires, ya que vamos a localizar las Postas de Vacunación que geocodificamos en el paso anterior.
+ 
+```{r}
+bbox <- getbb("Provincia de Córdoba, Argentina")
+
+head(bbox)
+```
+
+Ya tenemos los límites de la ciudad en la variable bbox. Ahora vamos a descargar la capa base utilizando *ggmap*. Lo que permite hacer ggmap es, en esencia, es añadir a los gráficos ya conocidos una capa cartográfica adicional. Para eso usa recursos disponibles en la web a través de APIs; ggmap tiene funciones para obtener mapas (de diversos tipos y de distintos orígenes: Google, Stamen, OpenStreetMap). Nosotros vamos a obtener un mapa de Stamen que es un estudio de visualización de datos que abre sus mapas para el uso de la comunidad. Pueden ver sus diferentes diseños en [**Stamen maps**](https://stamen.com/open-source/)
+
+```{r, message=FALSE}
+#Vamos a descargar el mapa
+
+cbaTerra <- get_stamenmap(bbox = bbox, #En bboxle indicamos los límites específicos, ya lo sabemos!
+                      maptype = "terrain", #En maptype le indicamos el tipo de mapa que queremos descargarnos. 
+                      zoom=8)#En zoom le indicamos el nivel de detalle que queremos. A más zoom, más detalle, pero también más pesado el archivo que nos descarguemos…
+
+#que tenemos en la variable CABA?
+head(cbaTerra) #raro?
+cbaTerra #R ya nos dice en la descripción que estamos trabajando con una imagen de mapa de Stamen Maps... e incluso nos sugiere como graficarlo!!!
+```
+
+Vamos a hacerle caso a los consejos de R y vamos a utilizar *ggmap* para dibujar el mapa. Por suerte para nosotros, ggmap tiene la misma sintaxis que ggplot(), por lo tanto no tendremos demasiados inconvenientes.
+
+```{r}
+
+ggmap(cbaTerra)
+
+```
+
+Y si probamos con otro tipo de mapa?
+
+```{r, message=FALSE}
+cbaTonner <- get_stamenmap(bbox = bbox, 
+                      maptype = "toner-background",  
+                      zoom=8)
+
+ggmap(cbaTonner)
+```
+
+Excelente, tenemos nuestra capa de base, pero ahora cómo ubicamos en contexto los Centros de Salud? Fácil... agregando una nueva capa a nuestro mapa!
+
+```{r}
+ggmap(cbaTonner) +
+  geom_sf(data=Centros_Salud_Direccion, inherit.aes=FALSE, color = "red", size = 1)
+```
+
+¿Qué les parece el mapa que obtuvimos?...
+
+# Haciendo mapas interactivos!
+
+Hasta el momento hicimos siempre mapas estáticos (con o sin capa base) pero también podemos hacer que estos mapas sean interactivos, con posiiblidad de hacer zoom y ver información adicional!
+
+Para eso vamos a usar la librería leaflet que básicamente es una [librería en Javascript](https://leafletjs.com/) para hacer mapas interactivos y que se llama igual, leaflet.
+
+Vamos a usar datos de INDEC de NBI a nivel departamento que obtenemos de su geoservicio.
+
+```{r}
+library(leaflet)
+nbi_deptos <- read_sf("https://github.com/martoalalu/clase-geo-salud/raw/990c36ecec182d3f8ff4dffc921c233160cb8d43/data/nbi_deptos.geojson")
+```
+
+Genial, ahora que tenemos los datos vamos a hacer un choropleth con porcentaje de personas con nbi por departamento.
+
+Al igual que con ggplot() a R le tenemos que avisar que vamos a hacer un mapa interactivo, por eso invocamos a "leaflet" luego necesitamos 3 componentes fundamentales:
+
+ 1. Setear dónde queremos que esté centrado el mapa y en qué nivel de zoom con **setView**
+ 2. Agregar la capa base con **addTiles**
+ 3. Agregar la geometría! Si es polígono con **addPolygons**, si son puntos es **addMarkers**.
+
+Veamos paso a paso. Primero un mapa con centro en Argentina y zoom = 4.
+
+```{r}
+leaflet() %>% 
+  setView(lng = -58.446216, lat = -34.615766, zoom = 4) %>% 
+  addTiles() 
+```
+
+Genial. Ahora le vamos a agregar los polígonos.
+
+```{r}
+leaflet() %>% 
+  setView(lng = -58.446216, lat = -34.615766, zoom = 4) %>% 
+  addTiles() %>% 
+  addPolygons(data=nbi_deptos)
+```
+
+Bien, y ahora el siguiente paso es hacer el choropleth.
+
+```{r}
+detach("package:tmaptools", unload=TRUE)
+library(viridisLite)
+
+binpal <- colorBin("viridis", nbi_deptos$personas_con_nbi_porc, 8, pretty = FALSE)
+
+leaflet() %>% 
+  setView(lng = -58.446216, lat = -34.615766, zoom = 4) %>% 
+  addTiles() %>% 
+  addPolygons(data=nbi_deptos, stroke=FALSE, smoothFactor = 0.2, fillOpacity = .8,
+    color = ~binpal(personas_con_nbi_porc))
+```
+
+Excelente! Por último vamos a agregarle un popup y una leyenda.
+
+```{r}
+
+leaflet() %>% 
+  setView(lng = -58.446216, lat = -34.615766, zoom = 4) %>% 
+  addTiles() %>% 
+  addPolygons(data=nbi_deptos, stroke=FALSE, smoothFactor = 0.2, fillOpacity = .8,
+    color = ~binpal(personas_con_nbi_porc),popup=paste(nbi_deptos$departamento,"<br>",nbi_deptos$provincia,"<br>","% NBI:",nbi_deptos$personas_con_nbi_porc)) %>% 
+  addLegend(pal = binpal, values = nbi_deptos$personas_con_nbi_porc, opacity = 0.7, title = "% Población con NBI",
+  position = "bottomright") %>% 
+  addProviderTiles(providers$CartoDB.Positron) #Cambiamos la capa base
+
+```
+
+¿Y si queremos hacer lo mismo pero con puntos?
+Fácil, reemplazamos el tipo de geometría addPolygons por addMarkers.
+
+```{r}
+leaflet() %>% 
+  setView(lng = -64.1871, lat = -32.06813, zoom = 8) %>% 
+  addTiles() %>% 
+  addMarkers(data=Centros_Salud_Direccion)
+```
+
+# Ruteo
+
+Como ya vimos en la clase pasada una de las operaciones espaciales más usadas es el cálculo de distancias. Ahora bien si lo que queremos medir es la distancia entre un lugar y otro poco sentido tiene hacerlo calculando una línea recta ya que no podemos llegar si no es a través de calles, avenidas, rutas, etc. Es decir que tenemos que tener en cuenta el trazado de calles y sus reglas (por donde se puede circular y por dónde no), y eso lo podemos hacer usando los servicios de ruteo.
+
+En este caso vamos a usar el servicio de ruteo que ofrece Open Street Map, básicamente nos permite indicar un punto de partida y otro de llegada y obtener el recorrido "real", la distancia y el tiempo de duración.
+
+Este servicio a diferencia del que ofrece GoogleMaps es libre y no requiere registrarse ni agregar ninguna tarjeta de crédito.
+
+La librería es **osrm** y la función es **osrmRoute**, en la que le tenemos que indicar obviamene el origen y  destino con coordenadas.
+
+Supongamos que queremos calcular cómo ir desde la Ciudad de Córdoba hasta Mina Clavero, veamos cómo funciona.
+
+```{r}
+library(osrm)
+
+cordoba <- c(nombre = "Córdoba Capital",
+                 lon = -64.197046,
+                 lat = -31.412731)
+
+
+mina_clavero <- c(nombre = "Mina Clavero",
+             lon = -65.005235,
+             lat = -31.7265)
+
+
+cordoba_mina_clavero <- osrmRoute(src = cordoba, 
+                                 dst = mina_clavero, 
+                                 returnclass = TRUE, 
+                                 overview = "full")
+
+```
+
+¿Qué nos respondió?
+
+```{r}
+class(cordoba_mina_clavero)
+cordoba_mina_clavero
+```
+
+Excelente! Entre Córdona y Mina Clavero hay 142km y se tarda aproxiamante 119 minutos (casi 2 horas).
+Y la respuesta es un **sf**, o sea que tranquilamente lo podemos pasar a un mapa!
+
+Hagamoslo interactivo directamente!
+
+```{r}
+leaflet(cordoba_mina_clavero) %>% 
+    addTiles() %>% 
+    addPolylines(color = "red")
+```
+
+Si preferimos estático podemos usar ggmap asi tenemos la capa base de Córdoba.
+```{r}
+ggmap(cbaTerra) +
+  geom_sf(data = cordoba_mina_clavero, inherit.aes=FALSE, color = 'red')
+```
+
+Por último a veces tenemos un df con origen y destino y queremos calcular la distancia.
+Creemos un df con origen en 3 plazas de Buenos Aires y destino en el Hospital de Clínicas.
+
+```{r}
+
+#Creamos un data
+x_origen <- c(-58.40352778480617,-58.38150439538028,-58.448860895241666)
+y_origen <- c(-34.61722159276842,-34.62581107542229,-34.591388382930475)
+nombre_origen <- c('Plaza Velasco Ibarra','Plaza Constitución','Parque de los Andes')
+x_destino <- c(-58.39993395509689,-58.39993395509689,-58.39993395509689)
+y_destino <- c(-34.598884680206055,-34.598884680206055,-34.598884680206055)
+nombre_destino <- c('Hospital de Clínicas','Hospital de Clínicas','Hospital de Clínicas')
+
+#Lo convertimos a dataframe
+data <- data.frame(nombre_origen, x_origen, y_origen,nombre_destino,x_destino,y_destino)
+
+bbox <- getbb("Ciudad Autónoma de Buenos Aires, Argentina")
+caba <- get_stamenmap(bbox = bbox, #En bboxle indicamos los límites específicos, ya lo sabemos!
+                      maptype = "terrain", #En maptype le indicamos el tipo de mapa que queremos descargarnos. 
+                      zoom=13)
+
+#Y lo mapeamos
+ggmap(caba) +
+  geom_point(data = data,aes(x=x_origen, y=y_origen)) +
+  geom_point(data = data,aes(x=x_destino, y=y_destino), color = 'blue')
+
+```
+
+Podemos iterar por cada objeto y calcular la distancia, duración y geometria y luego agregarla a nuestro df.
+
+```{r}
+
+#Iteramos por cada elemento de nuestro dataframe y le pasamos la función de osmrRoute
+for (i in 1:nrow(data))
+{
+origen <-  c(nombre = data$nombre_origen[i],
+                 lon = data$x_origen[i],
+                 lat = data$y_origen[i])
+
+destino <-  c(nombre = data$nombre_destino[i],
+             lon = data$x_destino[i],
+             lat = data$y_destino[i])
+
+
+recorrido <-  osrmRoute(src = origen, 
+                                 dst = destino, 
+                                 returnclass = TRUE, 
+                                 overview = "full")
+
+#Agregamos valores como columnas en el dataframe
+data$geometria[i] <- recorrido$geometry
+data$duracion[i] <- recorrido$duration
+data$distance[i] <- recorrido$distance
+
+}
+
+#Le indicamos qué columna tiene la geometría con el trazado
+data <- st_as_sf(data, sf_column_name = "geometria")
+
+
+```
+
+Y ahora sí, al mapa.
+
+```{r}
+ggmap(caba)+
+  geom_sf(data=data, aes(color=nombre_origen), size=2,inherit.aes=FALSE) + 
+  geom_point(data = data,aes(x=x_origen, y=y_origen)) +
+  geom_point(data = data,aes(x=x_destino, y=y_destino), color = 'blue')
+```
+
+Podemos hacer que el color sea por la distancia, o por el tiempo.
+
+```{r}
+ggmap(caba)+
+  geom_sf(data=data, aes(color=distance), size=2,inherit.aes=FALSE) + 
+  geom_point(data = data,aes(x=x_origen, y=y_origen)) +
+  geom_point(data = data,aes(x=x_destino, y=y_destino), color = 'blue')
+```
+
+
+# Yapa: Geolocalizando direcciones en el AMBA
+
+Hay otros servicios que nos permiten geolocalizar direcciones!
 
 USIG es la Unidad de Sistemas de Información Geográfica del Gobierno de la Ciudad de Buenos Aires y brinda un servicio de geocodificación (entre otras cosas) de datos de la Ciudad de Buenos Aires de manera gratuita!!!
 
@@ -131,7 +402,7 @@ Las funciones consultan la API del Normalizador de direcciones y de Déficit Hab
 
 Les proponemos hacer un ejercicio con las postas de vacunación de CABA
 
-```{r}
+```{r, eval = FALSE}
 Postas_Vacunacion <-  readxl::read_xlsx("clase-geo-salud/data/postas_vacunacion_covid.xlsx")
 
 
@@ -148,7 +419,7 @@ Con la función *mutate_USIG_geocode* podemos agregar las columnas de lon y lat 
 
 En resumen: es mejor incluir partido o municipio en las direcciones a georeferenciar.
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval = FALSE}
 Postas_Vacunacion_Direccion <- mutate_USIG_geocode(Postas_Vacunacion, "direccion") #paciencia. Puede tardar un poco! Utilizar la función es tan simple como indicar el DF y el nombre del campo que tiene la dirección que vamos a trabajar.
 
 USIG_geocode(c("9 de Julio y Belgrano, Temperley", "Callao y Corrientes", "Anchorena 1210, La Lucila"))
@@ -166,99 +437,3 @@ Postas_Vacunacion_Direccion <- Postas_Vacunacion_Direccion %>%
 summary (Postas_Vacunacion_Direccion)
 class(Postas_Vacunacion_Direccion)
 ```
-
-
-# Agregando contexto a la información
-
-Pudimos geolocalizar gran parte de nuestras direcciones de interés, aunque ya vimos que no es un proceso infalible... pero cuando trabajamos con datos gegráficos es importante poder tener una referencia, ubicar los puntos en contexto, pero ¿Qué pasa cuando no tenemos un mapa?
-
-Tenemos una opción! Podemos agregar capas base, que sería como agregar "una foto" sobre la cual posicionaremos los datos de interés. 
-
-El primer paso para obtener las capas bases que necesitamos es obtener el *bounding box* del mapa que queremos descargar. ¿Qué utilizamos?... así es! *getbb*. En este caso obtendremos un mapa de la Ciudad Autónoma de Buenos Aires, ya que vamos a localizar las Postas de Vacunación que geocodificamos en el paso anterior.
- 
-```{r}
-bbox <- getbb("Ciudad Autónoma de Buenos Aires,Argentina")
-
-head(bbox)
-```
-
-Ya tenemos los límites de la ciudad en la variable bbox. Ahora vamos a descargar la capa base utilizando *ggmap*. Lo que permite hacer ggmap es, en esencia, es añadir a los gráficos ya conocidos una capa cartográfica adicional. Para eso usa recursos disponibles en la web a través de APIs; ggmap tiene funciones para obtener mapas (de diversos tipos y de distintos orígenes: Google, Stamen, OpenStreetMap). Nosotros vamos a obtener un mapa de Stamen que es un estudio de visualización de datos que abre sus mapas para el uso de la comunidad. Pueden ver sus diferentes diseños en [**Stamen maps**](https://stamen.com/open-source/)
-
-```{r, message=FALSE}
-#Vamos a descargar el mapa
-
-CABATerra <- get_stamenmap(bbox = bbox, #En bboxle indicamos los límites específicos, ya lo sabemos!
-                      maptype = "terrain", #En maptype le indicamos el tipo de mapa que queremos descargarnos. 
-                      zoom=13)#En zoom le indicamos el nivel de detalle que queremos. A más zoom, más detalle, pero también más pesado el archivo que nos descarguemos…
-
-#que tenemos en la variable CABA?
-head(CABATerra) #raro?
-CABATerra #R ya nos dice en la descripción que estamos trabajando con una imagen de mapa de Stamen Maps... e incluso nos sugiere como graficarlo!!!
-```
-
-Vamos a hacerle caso a los consejos de R y vamos a utilizar *ggmap* para dibujar el mapa. Por suerte para nosotros, ggmap tiene la misma sintaxis que ggplot(), por lo tanto no tendremos demasiados inconvenientes.
-
-```{r}
-
-ggmap(CABATerra)
-
-```
-
-Y si probamos con otro tipo de mapa?
-
-```{r, message=FALSE}
-CABATonner <- get_stamenmap(bbox = bbox, 
-                      maptype = "toner-background",  
-                      zoom=13)
-
-ggmap(CABATonner)
-```
-
-Excelente, tenemos nuestra capa de base, pero ahora cómo ubicamos en contexto las Postas de Vacunación de la Ciudad? Fácil... agregando una nueva capa a nuestro mapa!
-
-```{r}
-ggmap(CABATonner) +
-  geom_sf(data=Postas_Vacunacion_Direccion, inherit.aes=FALSE, color = "red", size = 2)
-```
-
-¿Qué les parece el mapa que obtuvimos?...
-
-# Haciendo mapas interactivos!
-
-Hasta el momento hicimos siempre mapas estáticos (con o sin capa base) pero también podemos hacer que estos mapas sean interactivos, con posiiblidad de hacer zoom y ver información adicional!
-
-Para eso vamos a usar la librería leaflet que básicamente es una [librería en Javascript](https://leafletjs.com/) para hacer mapas interactivos y que se llama igual, leaflet.
-
-Vamos a usar datos de INDEC de NBI a nivel departamento que obtenemos de su geoservicio.
-
-```{r}
-library(leaflet)
-
-baseurl <- "https://geoservicios.indec.gob.ar/geoserver/wfs?request=GetFeature&service=WFS&typeName="
-capa_wfs <- "geocenso2010:nbi_dpto"
-
-nbi_deptos <- st_read(paste0(baseurl,capa_wfs))
-```
-
-Genial, ahora que tenemos los datos vamos a hacer un choropleth con porcentaje de personas con nbi por departamento.
-
-Al igual que con ggplot() a R le tenemos que avisar que vamos a hacer un mapa interactivo, por eso invocamos a "leaflet" luego necesitamos 3 componentes fundamentales:
- 1. Setear dónde queremos que esté centrado el mapa y en qué nivel de zoom con **setView**
- 2. Agregar la capa base con **addTiles**
- 3. Agregar la geometría! Si es polígono con **addPolygons**, si son puntos es **addMarkers**.
-
-```{r}
-
-nbi_deptos <- st_cast(nbi_deptos, "GEOMETRYCOLLECTION") %>%  st_collection_extract("POLYGON")
-
-library(viridisLite)
-binpal <- colorBin("viridis", nbi_deptos$personas_con_nbi_porc, 8, pretty = FALSE)
-
-leaflet() %>% 
-  setView(lng = -58.446216, lat = -34.615766, zoom = 4) %>% 
-  addTiles() %>% 
-  addPolygons(data=nbi_deptos, stroke=FALSE, smoothFactor = 0.2, fillOpacity = .8,
-    color = ~binpal(personas_con_nbi_porc),popup=paste(nbi_deptos$departamento,"% NBI:",nbi_deptos$personas_con_nbi_porc)) %>% 
-  addProviderTiles(providers$CartoDB.Positron)
-```
-
