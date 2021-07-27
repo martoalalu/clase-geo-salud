@@ -19,12 +19,12 @@ editor_options:
 ---
 
 ```{r , echo=TRUE, message=FALSE, warning=FALSE}
-library (tmaptools)
+#library (tmaptools)
+detach("package:tmaptools", unload=TRUE)
 library (RUMBA)
 library (tidyverse)
 library (sf)
 library (ggmap)
-library (osmdata)
 ```
 
 
@@ -48,14 +48,10 @@ Empecemos!
 
 Vamos a trabajar con datos de una base de datos de entros de salud municipales de Cordoba capital.
 
-```{r}
-setwd("C:/Users/Elian/OneDrive/Escritorio/Ciencia de datos/Geo en Salud/Clase 4") #definiendo el directorio de trabajo
-```
-
 
 
 ```{r}
-Centros_Salud <- readxl::read_xlsx("Listado_Centros_de_Salud_Municipales.xlsx")#deben colocar el directorio en el cual descomprimieron el archivo
+Centros_Salud <- read_csv("https://raw.githubusercontent.com/martoalalu/clase-geo-salud/clase-2021/data/centros_salud.csv")
 
 #vamos a explorar el objeto
 head (Centros_Salud)
@@ -136,7 +132,8 @@ Las funciones consultan la API del Normalizador de direcciones y de Déficit Hab
 Les proponemos hacer un ejercicio con las postas de vacunación de CABA
 
 ```{r}
-Postas_Vacunacion <-  readxl::read_xlsx("postas_vacunacion_covid.xlsx")#deben colocar el directorio en el cual descomprimieron el archivo
+Postas_Vacunacion <-  readxl::read_xlsx("clase-geo-salud/data/postas_vacunacion_covid.xlsx")
+
 
 #vamos a explorar el objeto
 head(Postas_Vacunacion)
@@ -153,6 +150,8 @@ En resumen: es mejor incluir partido o municipio en las direcciones a georeferen
 
 ```{r, message=FALSE}
 Postas_Vacunacion_Direccion <- mutate_USIG_geocode(Postas_Vacunacion, "direccion") #paciencia. Puede tardar un poco! Utilizar la función es tan simple como indicar el DF y el nombre del campo que tiene la dirección que vamos a trabajar.
+
+USIG_geocode(c("9 de Julio y Belgrano, Temperley", "Callao y Corrientes", "Anchorena 1210, La Lucila"))
 
 #vamos a explorar el objeto
 head(Postas_Vacunacion_Direccion)
@@ -223,4 +222,43 @@ ggmap(CABATonner) +
 ```
 
 ¿Qué les parece el mapa que obtuvimos?...
+
+# Haciendo mapas interactivos!
+
+Hasta el momento hicimos siempre mapas estáticos (con o sin capa base) pero también podemos hacer que estos mapas sean interactivos, con posiiblidad de hacer zoom y ver información adicional!
+
+Para eso vamos a usar la librería leaflet que básicamente es una [librería en Javascript](https://leafletjs.com/) para hacer mapas interactivos y que se llama igual, leaflet.
+
+Vamos a usar datos de INDEC de NBI a nivel departamento que obtenemos de su geoservicio.
+
+```{r}
+library(leaflet)
+
+baseurl <- "https://geoservicios.indec.gob.ar/geoserver/wfs?request=GetFeature&service=WFS&typeName="
+capa_wfs <- "geocenso2010:nbi_dpto"
+
+nbi_deptos <- st_read(paste0(baseurl,capa_wfs))
+```
+
+Genial, ahora que tenemos los datos vamos a hacer un choropleth con porcentaje de personas con nbi por departamento.
+
+Al igual que con ggplot() a R le tenemos que avisar que vamos a hacer un mapa interactivo, por eso invocamos a "leaflet" luego necesitamos 3 componentes fundamentales:
+ 1. Setear dónde queremos que esté centrado el mapa y en qué nivel de zoom con **setView**
+ 2. Agregar la capa base con **addTiles**
+ 3. Agregar la geometría! Si es polígono con **addPolygons**, si son puntos es **addMarkers**.
+
+```{r}
+
+nbi_deptos <- st_cast(nbi_deptos, "GEOMETRYCOLLECTION") %>%  st_collection_extract("POLYGON")
+
+library(viridisLite)
+binpal <- colorBin("viridis", nbi_deptos$personas_con_nbi_porc, 8, pretty = FALSE)
+
+leaflet() %>% 
+  setView(lng = -58.446216, lat = -34.615766, zoom = 4) %>% 
+  addTiles() %>% 
+  addPolygons(data=nbi_deptos, stroke=FALSE, smoothFactor = 0.2, fillOpacity = .8,
+    color = ~binpal(personas_con_nbi_porc),popup=paste(nbi_deptos$departamento,"% NBI:",nbi_deptos$personas_con_nbi_porc)) %>% 
+  addProviderTiles(providers$CartoDB.Positron)
+```
 
